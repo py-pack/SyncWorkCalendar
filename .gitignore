@@ -141,3 +141,11 @@ cython_debug/
 
 docker-compose.yml
 Dockerfile
+
+test.py
+
+test.db
+test.ipynb
+sqla_test.ipynb
+.ipynb_checkpoints/
+

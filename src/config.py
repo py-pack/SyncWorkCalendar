@@ -26,6 +26,14 @@ class DatabaseConfig(BaseModel):
     def url(self) -> PostgresDsn:
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
+    @property
+    def url_sync(self) -> PostgresDsn:
+        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+
+class TimeCampConfig(BaseModel):
+    token: str = "<PASSWORD>"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -36,8 +44,7 @@ class Settings(BaseSettings):
         env_ignore_empty=True,  # ігнорувати пусті значення
     )
     db: DatabaseConfig = DatabaseConfig()
+    tc: TimeCampConfig = TimeCampConfig()
 
 
 settings = Settings()
-
-print(settings.db.url)

@@ -16,3 +16,15 @@ class Base(DeclarativeBase):
         return f"{camel_case_to_snake_case(cls.__name__)}s"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    def fill(self, **kwargs):
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        return self
+
+    @classmethod
+    def create(cls, **kwargs):
+        instance = cls()
+        instance.fill(**kwargs)
+        return instance

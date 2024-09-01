@@ -6,7 +6,7 @@ from datetime import datetime
 from .base import Base
 
 
-class TcEntry(Base):
+class TCEntry(Base):
     __tablename__ = 'tc_entries'
 
     tc_project_id: Mapped[int] = mapped_column(Integer, nullable=True)

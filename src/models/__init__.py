@@ -1,9 +1,9 @@
 __all__ = (
     "Base",
     "TCProject",
-    "TcEntry",
+    "TCEntry",
 )
 
 from .base import Base
 from .tc_project import TCProject
-from .tc_entry import TcEntry
+from .tc_entry import TCEntry

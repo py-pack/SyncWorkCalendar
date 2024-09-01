@@ -26,8 +26,8 @@ def upgrade() -> None:
         sa.Column("key", sa.String(), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
 
-        sa.Column("is_archved", sa.Boolean(), nullable=False),
-        sa.Column("is_watch", sa.Boolean(), nullable=False),
+        sa.Column("is_archved", sa.Boolean(), nullable=False, default=False),
+        sa.Column("is_watched", sa.Boolean(), nullable=False, default=True),
 
         sa.PrimaryKeyConstraint("id", name=op.f("pk_jr_projects")),
         sa.UniqueConstraint("key", name=op.f("uq_jr_projects_key")),

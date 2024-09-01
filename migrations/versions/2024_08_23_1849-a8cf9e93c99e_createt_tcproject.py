@@ -11,7 +11,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 revision: str = "a8cf9e93c99e"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
@@ -27,9 +26,9 @@ def upgrade() -> None:
         sa.Column("parent_id", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
 
-        sa.Column("level", sa.SmallInteger(), nullable=False),
-        sa.Column("is_archived", sa.Boolean(), nullable=False),
-        sa.Column("is_synced", sa.Boolean(), nullable=False),
+        sa.Column("level", sa.SmallInteger(), nullable=False, default=1),
+        sa.Column("is_synced", sa.Boolean(), nullable=False, default=False),
+        sa.Column("is_watched", sa.Boolean(), nullable=False, default=True),
         sa.Column("color", sa.String(), nullable=True),
 
         sa.Column("add_date_at", sa.DateTime(), nullable=True),

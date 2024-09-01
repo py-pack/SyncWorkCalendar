@@ -25,7 +25,6 @@ class TCTaskDTO(BaseModel):
     id: Optional[int] = None
     tc_project_id: Optional[int] = None
     description: Optional[str] = None
-    meta: Optional[str] = None
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
     modify_at: Optional[datetime] = None

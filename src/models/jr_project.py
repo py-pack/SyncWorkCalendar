@@ -7,5 +7,5 @@ from .base import Base
 class JRProject(Base):
     key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    is_archved: Mapped[str] = mapped_column(Boolean, default=True, nullable=False)
-    is_watch: Mapped[str] = mapped_column(Boolean, default=True, nullable=False)
+    is_archved: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_watch: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

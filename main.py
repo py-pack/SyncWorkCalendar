@@ -22,6 +22,7 @@ async def main():
     tc_entries = client.get_entries(date_from, date_to)
     await TCEntriesDAO.sync_all_between(tc_entries, date_from, date_to)
 
+    # JIRA Project
 
 if __name__ == '__main__':
     asyncio.run(main())

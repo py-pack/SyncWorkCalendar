@@ -35,6 +35,10 @@ class TimeCampConfig(BaseModel):
     token: str = "<PASSWORD>"
 
 
+class JiraConfig(BaseModel):
+    token: str = "<PASSWORD>"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),  # порядок підвантаження мержа змінинних
@@ -45,6 +49,7 @@ class Settings(BaseSettings):
     )
     db: DatabaseConfig = DatabaseConfig()
     tc: TimeCampConfig = TimeCampConfig()
+    jira: JiraConfig = JiraConfig()
 
 
 settings = Settings()

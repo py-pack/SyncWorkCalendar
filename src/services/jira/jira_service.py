@@ -1,7 +1,7 @@
-from typing import List
 import requests
 
-from .dto import JiraProjectDTO
+from typing import List, Any
+from .dto import JiraUserDTO, JiraIssueDTO, JiraProjectDTO
 
 
 class JiraService:
@@ -17,6 +17,87 @@ class JiraService:
             name=project.get('name'),
             is_archved=project.get('archived'),
         ) for project in projects]
+        return results
+
+    def search_issues(self, keys: List[str]) -> List[JiraIssueDTO]:
+        jql_keys = 'key in ({})'.format(','.join(keys))
+        data = {
+            'jql': jql_keys
+        }
+        search_request: dict[str, Any] = self._make_request('api/2/search', method='POST', data=data)
+
+        issues: list[dict[str, Any]] = search_request.get('issues')
+        if issues is None:
+            # retrun []
+            pass
+
+        results = []
+        for issue in issues:
+            fields: dict | None = issue.get('fields')
+            if fields is None:
+                continue
+
+            project = None
+            project_field: dict = fields.get('project')
+            if project_field is not None:
+                project = JiraProjectDTO(
+                    id=project_field.get('id'),
+                    key=project_field.get('key'),
+                    name=project_field.get('name'),
+                )
+
+            creator = None
+            creator_field: dict = fields.get('creator')
+            if project_field is not None:
+                creator = JiraUserDTO(
+                    key=creator_field.get('key'),
+                    name=creator_field.get('name'),
+                    full_name=creator_field.get('displayName'),
+                    email=creator_field.get('emailAddress'),
+                )
+
+            reporter = None
+            reporter_field: dict = fields.get('reporter')
+            if project_field is not None:
+                reporter = JiraUserDTO(
+                    key=reporter_field.get('key'),
+                    name=reporter_field.get('name'),
+                    full_name=reporter_field.get('displayName'),
+                    email=reporter_field.get('emailAddress'),
+                )
+
+            issue_dto = JiraIssueDTO(
+                id=issue.get('id'),
+
+                key=issue.get('key'),
+                name=fields.get('summary'),
+
+                jr_project_id=project.id if project is not None else None,
+
+                epic_key=fields.get('customfield_10005', None),
+                parent_key=fields.get('parent', {}).get('key', None),
+
+                type=fields.get('issuetype', {}).get('name', 'Task'),
+                priority=fields.get('priority', {}).get('name', 'Medium'),
+                status=fields.get('status', {}).get('name', 'To DO'),
+
+                jr_creator_id=creator.id if creator is not None else None,
+                jr_reporter_id=reporter.id if reporter is not None else None,
+
+                estimate_plan=fields.get('timeoriginalestimate', 0),
+                estimate_fact=fields.get('aggregateprogress', {}).get('progress', 0),
+                estimate_rest=fields.get('aggregatetimeestimate', 0),
+
+                created_at=fields.get('created'),
+                updated_at=fields.get('updated'),
+
+                project=project,
+                creator=creator,
+                reporter=reporter,
+            )
+
+            results.append(issue_dto)
+
         return results
 
     def _make_request(

@@ -16,9 +16,9 @@ class BaseDAO:
             return result.scalars().all()
 
     @classmethod
-    async def sync_all(cls, projects: List[BaseModel]):
-        projects_db = await cls.all()
-        await cls._sync(projects, projects_db)
+    async def sync_all(cls, dto_list: List[BaseModel]):
+        models = await cls.all()
+        await cls._sync(dto_list, models)
 
     @classmethod
     async def update_by_keys(cls, new_dto_list: List[BaseModel], key_sync: str = 'id'):

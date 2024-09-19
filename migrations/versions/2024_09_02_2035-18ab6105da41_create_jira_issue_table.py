@@ -35,15 +35,15 @@ def upgrade() -> None:
         sa.Column("priority", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False),
 
-        sa.Column("jr_creator_id", sa.Integer(), nullable=True),
-        sa.Column("jr_reporter_id", sa.Integer(), nullable=True),
+        sa.Column("jr_creator_key", sa.String(), nullable=True),
+        sa.Column("jr_reporter_key", sa.String(), nullable=True),
 
         sa.Column("estimate_plan", sa.Integer(), nullable=False, default=0),
         sa.Column("estimate_fact", sa.Integer(), nullable=False, default=0),
         sa.Column("estimate_rest", sa.Integer(), nullable=False, default=0),
 
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
 
         sa.PrimaryKeyConstraint("id", name=op.f("pk_jr_issues")),
         sa.UniqueConstraint("key", name=op.f("uq_jr_issues_key")),
@@ -63,29 +63,30 @@ def upgrade() -> None:
     )
 
     op.create_index(
-        op.f("ix_jr_issues_jr_creator_id"),
-        "jr_issues",
-        ["jr_creator_id"],
-        unique=False,
-    )
-    op.create_index(
         op.f("ix_jr_issues_jr_project_id"),
         "jr_issues",
         ["jr_project_id"],
         unique=False,
     )
+
     op.create_index(
-        op.f("ix_jr_issues_jr_reporter_id"),
+        op.f("ix_jr_issues_jr_creator_key"),
         "jr_issues",
-        ["jr_reporter_id"],
+        ["jr_creator_key"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_jr_issues_jr_reporter_key"),
+        "jr_issues",
+        ["jr_reporter_key"],
         unique=False,
     )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_jr_issues_jr_reporter_id"), table_name="jr_issues")
+    op.drop_index(op.f("ix_jr_issues_jr_reporter_key"), table_name="jr_issues")
+    op.drop_index(op.f("ix_jr_issues_jr_creator_key"), table_name="jr_issues")
     op.drop_index(op.f("ix_jr_issues_jr_project_id"), table_name="jr_issues")
-    op.drop_index(op.f("ix_jr_issues_jr_creator_id"), table_name="jr_issues")
     op.drop_index(op.f("ix_jr_issues_parent_key"), table_name="jr_issues")
     op.drop_index(op.f("ix_jr_issues_epic_key"), table_name="jr_issues")
 

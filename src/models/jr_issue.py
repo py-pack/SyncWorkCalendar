@@ -19,8 +19,8 @@ class JRIssue(Base):
     priority: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
 
-    jr_creator_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)
-    jr_reporter_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)
+    jr_creator_key: Mapped[str] = mapped_column(String, nullable=True, index=True)
+    jr_reporter_key: Mapped[str] = mapped_column(String, nullable=True, index=True)
 
     # timeoriginalestimate
     estimate_plan: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -29,5 +29,5 @@ class JRIssue(Base):
     # aggregatetimeestimate
     estimate_rest: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

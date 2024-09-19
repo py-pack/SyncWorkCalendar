@@ -28,8 +28,7 @@ class JiraService:
 
         issues: list[dict[str, Any]] = search_request.get('issues')
         if issues is None:
-            # retrun []
-            pass
+            return []
 
         results = []
         for issue in issues:
@@ -81,8 +80,8 @@ class JiraService:
                 priority=fields.get('priority', {}).get('name', 'Medium'),
                 status=fields.get('status', {}).get('name', 'To DO'),
 
-                jr_creator_id=creator.id if creator is not None else None,
-                jr_reporter_id=reporter.id if reporter is not None else None,
+                jr_creator_key=creator.key if creator is not None else None,
+                jr_reporter_key=reporter.key if reporter is not None else None,
 
                 estimate_plan=fields.get('timeoriginalestimate', 0),
                 estimate_fact=fields.get('aggregateprogress', {}).get('progress', 0),

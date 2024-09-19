@@ -9,10 +9,10 @@ class DatabaseConfig(BaseModel):
     user: str = "user"
     password: str = "pass"
 
-    echo: bool = (False,)
-    echo_pool: bool = (False,)
-    pool_size: int = (5,)
-    max_overflow: int = (10,)
+    echo: bool = False
+    echo_pool: bool = False
+    pool_size: int = 5
+    max_overflow: int = 10
 
     naming_convention: dict[str, str] = {
         "ix": "ix_%(column_0_label)s",

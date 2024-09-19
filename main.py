@@ -5,7 +5,7 @@ from src.config import settings
 
 from src.services.time_camp import TCRequestService
 from src.services.jira import JiraService
-from src.dao import TCEntriesDAO, TCProjectDAO, JRProjectDao
+from src.dao import TCEntriesDAO, TCProjectDAO, JRProjectDAO
 
 
 async def main():
@@ -19,7 +19,7 @@ async def sync_jira():
     client = JiraService(settings.jira.token)
     jira_projects = client.get_projects()
 
-    await JRProjectDao.sync_all(jira_projects)
+    await JRProjectDAO.sync_all(jira_projects)
 
 
 async def sync_time_camp():

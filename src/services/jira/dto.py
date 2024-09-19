@@ -18,15 +18,10 @@ class JiraProjectDTO(BaseModel):
 
 
 class JiraUserDTO(BaseModel):
-    id: Optional[int] = None
     key: str = ''
     name: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
-
-    @field_validator('id', mode='before')
-    def validate_id(cls, value):
-        return int(value) if value is not None and int(value) > 0 else None
 
     class Config:
         from_attributes = True
@@ -43,8 +38,9 @@ class JiraIssueDTO(BaseModel):
     type: str = None
     priority: str = None
     status: str = None
-    jr_creator_id: Optional[int] = None
-    jr_reporter_id: Optional[int] = None
+
+    jr_creator_key: Optional[str] = None
+    jr_reporter_key: Optional[str] = None
 
     estimate_plan: int = 0
     estimate_fact: int = 0
@@ -57,7 +53,7 @@ class JiraIssueDTO(BaseModel):
     creator: Optional[JiraUserDTO] = None
     reporter: Optional[JiraUserDTO] = None
 
-    @field_validator('id', 'jr_project_id', 'jr_creator_id', 'jr_reporter_id', mode='before')
+    @field_validator('id', 'jr_project_id', mode='before')
     def validate_id(cls, value):
         return int(value) if value is not None and int(value) > 0 else None
 

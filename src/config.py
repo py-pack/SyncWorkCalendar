@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     db: DatabaseConfig = DatabaseConfig()
     tc: TimeCampConfig = TimeCampConfig()
     jira: JiraConfig = JiraConfig()
+    current_user: str = ''
 
 
 settings = Settings()

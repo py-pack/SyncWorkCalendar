@@ -1,7 +1,8 @@
 import requests
 
 from typing import List, Any
-from .dto import JiraUserDTO, JiraIssueDTO, JiraProjectDTO
+from .dto import JiraUserDTO, JiraIssueDTO, JiraProjectDTO, JiraWorklogDTO
+from datetime import datetime
 
 
 class JiraService:
@@ -98,6 +99,32 @@ class JiraService:
             results.append(issue_dto)
 
         return results
+
+    def serch_worklogs_by_user(self, start: datetime, finish: datetime, user_key: str) -> List[JiraWorklogDTO]:
+        data = {
+            "from": start.strftime('%Y-%m-%d'),
+            "to": finish.strftime('%Y-%m-%d'),
+            "worker": [user_key]
+        }
+
+        worklogs = self._make_request(
+            'tempo-timesheets/4/worklogs/search',
+            method='POST',
+            data=data
+        )
+
+        result = [JiraWorklogDTO(
+            id=worklog.get("originId"),
+            jr_issues_id=worklog.get("originTaskId"),
+            description=worklog.get("comment"),
+            jr_worker_key=worklog.get("worker"),
+            started_at=worklog.get("started"),
+            duration=worklog.get("timeSpentSeconds"),
+            created_at=worklog.get("dateCreated"),
+            updated_at=worklog.get("dateUpdated"),
+        ) for worklog in worklogs]
+
+        return result
 
     def _make_request(
         self,

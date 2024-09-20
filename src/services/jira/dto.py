@@ -63,3 +63,24 @@ class JiraIssueDTO(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class JiraWorklogDTO(BaseModel):
+    id: int = None
+    jr_issues_id: int = None
+    description: str = None
+    # meta: Optional[dict] = None
+    jr_worker_key: Optional[str] = None
+    started_at: datetime = None
+    duration: int = None
+    created_at: datetime = None
+    updated_at: datetime = None
+
+    issue: Optional[JiraIssueDTO] = None
+
+    @field_validator('id', 'jr_issues_id', mode='before')
+    def validate_id(cls, value):
+        return int(value) if value is not None and int(value) > 0 else None
+
+    class Config:
+        from_attributes = True

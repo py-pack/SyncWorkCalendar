@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from pydantic import BaseModel, field_validator
 
 
@@ -68,10 +68,10 @@ class JiraIssueDTO(BaseModel):
 class JiraWorklogDTO(BaseModel):
     id: int = None
     jr_issues_id: int = None
+    jr_issues_key: Optional[str] = None
     description: str = None
-    # meta: Optional[dict] = None
     jr_worker_key: Optional[str] = None
-    started_at: datetime = None
+    started_at: date = None
     duration: int = None
     created_at: datetime = None
     updated_at: datetime = None

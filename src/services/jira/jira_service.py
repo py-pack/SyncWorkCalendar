@@ -116,6 +116,7 @@ class JiraService:
         result = [JiraWorklogDTO(
             id=worklog.get("originId"),
             jr_issues_id=worklog.get("originTaskId"),
+            jr_issues_key=worklog.get("issue", {}).get('key'),
             description=worklog.get("comment"),
             jr_worker_key=worklog.get("worker"),
             started_at=worklog.get("started"),

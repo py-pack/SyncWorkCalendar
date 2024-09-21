@@ -14,10 +14,10 @@ class TCEntriesDAO(BaseDAO):
     async def sync_all_between(cls, entries, date_from: datetime, date_to: datetime):
         async with db_helper.session_factory() as db:
             entries_db = (await db.execute(
-                select(TCEntry).where(
+                select(cls.model).where(
                     and_(
-                        TCEntry.start_at >= datetime.combine(date_from.date(), time.min),
-                        TCEntry.start_at <= datetime.combine(date_to.date(), time.max),
+                        cls.model.start_at >= datetime.combine(date_from.date(), time.min),
+                        cls.model.start_at <= datetime.combine(date_to.date(), time.max),
                     )
                 ))).scalars().all()
 

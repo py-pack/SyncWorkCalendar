@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     tc: TimeCampConfig = TimeCampConfig()
     jira: JiraConfig = JiraConfig()
     current_user: str = ''
+    templates: dict[str, list[str]] = {
+        "MP-1": [
+            "Daily stand-up",
+        ],
+        "MP-2": [
+            "Grooming",
+        ]
+    }
 
 
 settings = Settings()

@@ -10,6 +10,15 @@ class BaseDAO:
     model = None
 
     @classmethod
+    async def find(cls, id: int) -> None | BaseModel:
+        async with db_helper.session_factory() as session:
+            result = await session.execute(
+                select(cls.model).where(
+                    cls.model.id == id
+                ))
+            return result.scalar_one_or_none()
+
+    @classmethod
     async def all(cls):
         async with db_helper.session_factory() as session:
             result = await session.execute(select(cls.model))

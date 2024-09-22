@@ -46,4 +46,4 @@ class UpdateJiraTask:
         await dao.sync_all_between(worklogs, start_time, end_time)
 
         jira_updates_keys = list(set(worklog.jr_issues_key for worklog in worklogs))
-        await  self.update_jira_issues(jira_updates_keys)
+        await self.update_jira_issues(jira_updates_keys)

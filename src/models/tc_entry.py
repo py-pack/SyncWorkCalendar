@@ -17,7 +17,7 @@ class TCEntry(Base):
     start_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     duration: Mapped[int] = mapped_column(Integer, Computed("EXTRACT(EPOCH FROM end_at - start_at)"), nullable=False)
-    modify_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 def change_tc_entry_description(target: TCEntry, value: str | None, oldvalue: str | None, initiator):

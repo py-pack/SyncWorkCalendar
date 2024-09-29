@@ -28,7 +28,7 @@ class TCTaskDTO(BaseModel):
     description: Optional[str] = None
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
-    modify_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     @field_validator('id', 'tc_project_id', mode='before')
     def validate_id(cls, value):

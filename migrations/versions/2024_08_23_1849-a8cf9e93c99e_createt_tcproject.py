@@ -21,9 +21,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "tc_projects",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False, primary_key=True),
 
-        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False, unique=True),
         sa.Column("parent_id", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
 
@@ -34,11 +34,8 @@ def upgrade() -> None:
         sa.Column("issue_key", sa.String(), nullable=True),
         sa.Column("color", sa.String(), nullable=True),
 
-        sa.Column("created_at", sa.DateTime(), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), nullable=True),
-
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_tc_projects")),
-        sa.UniqueConstraint("name", name=op.f("uq_tc_projects_name")),
+        sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=True, server_default=sa.func.now()),
+        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=True, server_default=sa.func.now()),
     )
 
 

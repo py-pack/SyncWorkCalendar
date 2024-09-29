@@ -16,5 +16,6 @@ class TCProject(Base):
 
     issue_key: Mapped[str] = mapped_column(String, nullable=True)
     color: Mapped[str] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

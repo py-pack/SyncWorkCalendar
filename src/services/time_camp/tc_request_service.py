@@ -52,7 +52,7 @@ class TCRequestService:
                 description=entry.get("description"),
                 start_at=f"{date_entry} {entry['start_time']}",
                 end_at=f"{date_entry} {entry['end_time']}",
-                modify_at=entry.get("last_modify"),
+                updated_at=entry.get("last_modify"),
             )
 
             results.append(resultDTO)

@@ -21,15 +21,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "jr_users",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False, primary_key=True),
 
-        sa.Column("key", sa.String(), nullable=False),
+        sa.Column("key", sa.String(), nullable=False, unique=True),
         sa.Column("name", sa.String(), nullable=True),
         sa.Column("full_name", sa.String(), nullable=True),
         sa.Column("email", sa.String(), nullable=True),
-
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_jr_users")),
-        sa.UniqueConstraint("key", name=op.f("uq_jr_users_key")),
     )
 
 

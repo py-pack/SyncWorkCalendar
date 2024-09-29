@@ -17,8 +17,8 @@ class JRWorklog(Base):
     started_at: Mapped[datetime] = mapped_column(Date(), nullable=False)
     duration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 def change_to_description(target: JRWorklog, value: str | None, oldvalue: str | None, initiator):

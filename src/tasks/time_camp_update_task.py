@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from src.services.time_camp import TCRequestService, TCTaskDTO
+from src.services.time_camp import TCRequestService
 from src.dao import TCProjectDAO, TCEntriesDAO
 from src.config import settings
 

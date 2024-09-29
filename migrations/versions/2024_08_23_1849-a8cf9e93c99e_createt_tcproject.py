@@ -10,6 +10,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.sql import false
 
 revision: str = "a8cf9e93c99e"
 down_revision: Union[str, None] = None
@@ -26,13 +27,15 @@ def upgrade() -> None:
         sa.Column("parent_id", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=True),
 
-        sa.Column("level", sa.SmallInteger(), nullable=False, default=1),
-        sa.Column("is_synced", sa.Boolean(), nullable=False, default=False),
-        sa.Column("is_watched", sa.Boolean(), nullable=False, default=True),
+        sa.Column("level", sa.SmallInteger(), nullable=False, server_default='1'),
+        sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=false()),
+        sa.Column("is_sync", sa.Boolean(), nullable=False, server_default=false()),
+
+        sa.Column("issue_key", sa.String(), nullable=True),
         sa.Column("color", sa.String(), nullable=True),
 
-        sa.Column("add_date_at", sa.DateTime(), nullable=True),
-        sa.Column("modify_at", sa.DateTime(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=True),
+        sa.Column("updated_at", sa.DateTime(), nullable=True),
 
         sa.PrimaryKeyConstraint("id", name=op.f("pk_tc_projects")),
         sa.UniqueConstraint("name", name=op.f("uq_tc_projects_name")),

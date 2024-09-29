@@ -23,9 +23,10 @@ class TCRequestService:
                     parent_id=project.get('parent_id'),
                     user_id=project.get('assigned_by'),
                     level=project.get('level'),
+                    is_archived=project.get('archived'),
                     color=project.get('color'),
-                    add_date_at=project.get('add_date'),
-                    modify_at=project.get('modify_time'),
+                    created_at=project.get('add_date'),
+                    updated_at=project.get('modify_time'),
                 ))
 
         return results

@@ -11,9 +11,10 @@ class TCProject(Base):
     user_id: Mapped[int] = mapped_column(Integer, nullable=True)
 
     level: Mapped[int] = mapped_column(SmallInteger, default=1)
-    is_synced: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_watched: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_sync: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    issue_key: Mapped[str] = mapped_column(String, nullable=True)
     color: Mapped[str] = mapped_column(String, nullable=True)
-    add_date_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    modify_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)

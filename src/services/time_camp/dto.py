@@ -9,9 +9,10 @@ class TCProjectDTO(BaseModel):
     parent_id: Optional[int] = None
     user_id: Optional[int] = None
     level: Optional[int] = None
+    is_archived: bool = False
     color: Optional[str] = None
-    add_date_at: Optional[datetime] = None
-    modify_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     @field_validator('id', 'parent_id', 'user_id', mode='before')
     def validate_id(cls, value):

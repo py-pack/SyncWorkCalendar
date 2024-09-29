@@ -17,7 +17,7 @@ class SyncTaskService:
     def match_task(cls, description: str) -> None | str:
         cls._init_cache()
 
-        projecct_task_match = cls.project_task_pattern.match(description)
+        projecct_task_match = cls.project_task_pattern.search(description)
         if projecct_task_match:
             project_key = projecct_task_match.group('project_key')
             task_num = projecct_task_match.group('task_num')
@@ -42,9 +42,16 @@ class SyncTaskService:
                 for phrase in phrases:
                     cls.project_templates.append(
                         {
-                            "pattern": re.compile(phrase, re.IGNORECASE),
+                            "pattern": re.compile(cls._convert_regex(phrase), re.IGNORECASE),
                             "task": task,
                         })
+
+    @classmethod
+    def _convert_regex(cls, phrase: str):
+        if phrase.startswith("/") and phrase.endswith("/"):
+            return phrase[1:-1]
+        else:
+            return re.escape(phrase)
 
     @classmethod
     def _check_cach(cls) -> bool:

@@ -21,7 +21,7 @@ class TCEntry(Base):
 
 
 def change_tc_entry_description(target: TCEntry, value: str | None, oldvalue: str | None, initiator):
-    if value == oldvalue:
+    if value == oldvalue and target.meta is not None:
         return
 
     from src.core.utils import SyncTaskService

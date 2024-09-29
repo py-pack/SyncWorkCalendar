@@ -32,11 +32,11 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column("source_id", sa.Integer(), nullable=False),
-        sa.Column("target_id", sa.Integer(), nullable=True),
+        sa.Column("source_id", sa.Integer(), nullable=False, index=True),
+        sa.Column("target_id", sa.Integer(), nullable=True, index=True),
 
-        sa.Column("worker_key", sa.String(), nullable=False, index=True),
-        sa.Column("issue_key", sa.String(), nullable=False, index=True),
+        sa.Column("worker_key", sa.String(), nullable=False),
+        sa.Column("issue_key", sa.String(), nullable=False),
         sa.Column("issue_id", sa.Integer(), nullable=True, index=True),
 
         sa.Column("content", sa.String(), nullable=True),

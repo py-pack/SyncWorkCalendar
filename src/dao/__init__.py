@@ -6,6 +6,8 @@ __all__ = (
     "JRUsersDAO",
     "JRIssuesDAO",
     "JRWorklogDAO",
+
+    "KeyTemplateDAO",
 )
 
 from .tc_project_dao import TCProjectDAO
@@ -15,3 +17,5 @@ from .jr_project_dao import JRProjectDAO
 from .jr_users_dao import JRUsersDAO
 from .jr_issues_dao import JRIssuesDAO
 from .jr_worklog_dao import JRWorklogDAO
+
+from .key_template_dao import KeyTemplateDAO

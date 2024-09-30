@@ -22,8 +22,8 @@ def upgrade() -> None:
     op.create_table(
         "key_templates",
         sa.Column("id", sa.Integer(), nullable=False, primary_key=True),
-        sa.Column("template", sa.String(), nullable=False),
         sa.Column("issue_key", sa.String(), nullable=False),
+        sa.Column("template", sa.String(), nullable=False),
     )
 
 

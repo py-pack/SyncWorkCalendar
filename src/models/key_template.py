@@ -5,5 +5,5 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 
 class KeyTemplate(Base):
-    template: Mapped[str] = mapped_column(String, nullable=False)
     issue_key: Mapped[str] = mapped_column(String, nullable=False)
+    template: Mapped[str] = mapped_column(String, nullable=False)

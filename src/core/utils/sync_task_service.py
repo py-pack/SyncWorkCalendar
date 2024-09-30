@@ -1,7 +1,6 @@
 import re
 import time
-from src.dao import JRProjectDAO
-from src.config import settings
+from src.dao import JRProjectDAO, KeyTemplateDAO
 
 
 class SyncTaskService:
@@ -26,8 +25,8 @@ class SyncTaskService:
                 return f"{project_key}-{task_num}"
 
         for template in cls.project_templates:
-            if template["pattern"].search(description):
-                return template["task"]
+            if template["template"].search(description):
+                return template["key"]
 
         return None
 
@@ -37,21 +36,8 @@ class SyncTaskService:
             cls.project_key = JRProjectDAO.all_keys_sync()
 
         if cls.project_templates is None or cls._check_cach():
-            cls.project_templates = []
-            for task, phrases in settings.templates.items():
-                for phrase in phrases:
-                    cls.project_templates.append(
-                        {
-                            "pattern": re.compile(cls._convert_regex(phrase), re.IGNORECASE),
-                            "task": task,
-                        })
-
-    @classmethod
-    def _convert_regex(cls, phrase: str):
-        if phrase.startswith("/") and phrase.endswith("/"):
-            return phrase[1:-1]
-        else:
-            return re.escape(phrase)
+            key_dao = KeyTemplateDAO()
+            cls.project_templates = key_dao.get_templates()
 
     @classmethod
     def _check_cach(cls) -> bool:

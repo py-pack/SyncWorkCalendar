@@ -1,11 +1,17 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Integer, String, JSON, DateTime, Computed
 from sqlalchemy.event import listen
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import relationship, foreign
 from sqlalchemy.orm.attributes import flag_modified
 
 from datetime import datetime
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .tc_project import TCProject
 
 
 class TCEntry(Base):
@@ -18,6 +24,12 @@ class TCEntry(Base):
     end_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     duration: Mapped[int] = mapped_column(Integer, Computed("EXTRACT(EPOCH FROM end_at - start_at)"), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tc_project = relationship(
+        "TCProject",
+        primaryjoin="foreign(TCEntry.tc_project_id) == TCProject.id",
+        back_populates="ts_entries",
+    )
 
 
 def change_tc_entry_description(target: TCEntry, value: str | None, oldvalue: str | None, initiator):

@@ -1,22 +1,22 @@
 import enum
 
-from datetime import datetime, date
-from pyexpat import native_encoding
+from datetime import datetime, date, UTC
 
 from .base import Base
 
-from sqlalchemy.orm import mapped_column, Mapped
 from sqlalchemy import String, Integer, DateTime, Date, Enum
+from sqlalchemy.orm import mapped_column, Mapped
+from sqlalchemy.event import listens_for
 
 
 class StatusTaskEnum(enum.Enum):
-    PRE_CREATE = "pre_create"
-    CREATE = "create"
-    CREATED = "created"
-    PRE_UPDATE = "pre_update"
-    UPDATE = "update"
-    UPDATED = "updated"
-    SYNC = "sync"
+    pre_create = "pre_create"
+    create = "create"
+    created = "created"
+    pre_update = "pre_update"
+    update = "update"
+    updated = "updated"
+    sync = "sync"
 
 
 class WorklogSyncTask(Base):
@@ -33,3 +33,12 @@ class WorklogSyncTask(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+@listens_for(WorklogSyncTask, 'before_insert')
+@listens_for(WorklogSyncTask, 'before_update')
+def set_created_at(mapper, connection, target):
+    date_now: datetime = datetime.now(UTC)
+    if not target.created_at:
+        target.created_at = date_now
+    target.updated_at = date_now

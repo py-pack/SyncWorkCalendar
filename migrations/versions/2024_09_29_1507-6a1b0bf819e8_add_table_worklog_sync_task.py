@@ -26,8 +26,8 @@ def upgrade() -> None:
         sa.Column(
             "status",
             sa.Enum(
-                "PRE_CREATE", "CREATE", "CREATED",
-                "PRE_UPDATE", "UPDATE", "UPDATED", "SYNC",
+                "pre_create", "create", "created",
+                "pre_update", "update", "updated", "sync",
                 name="worklog_sync_status_task_enum",
             ),
             nullable=False,

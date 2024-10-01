@@ -2,7 +2,7 @@
 
 Revision ID: 5f712ea0757b
 Revises: 6a1b0bf819e8
-Create Date: 2024-09-29 17:13:24.626729
+Create Date: 2024-08-29 17:13:24.626729
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "5f712ea0757b"
-down_revision: Union[str, None] = "6a1b0bf819e8"
+down_revision: Union[str, None] = "82f082ce0b72"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

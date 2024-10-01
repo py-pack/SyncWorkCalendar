@@ -1,7 +1,7 @@
 from typing import List
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import Base
@@ -12,11 +12,14 @@ class BaseDAO:
 
     @classmethod
     async def find(cls, db: AsyncSession, id: int) -> None | BaseModel:
-        result = await db.execute(
-            select(cls.model).where(
-                cls.model.id == id
-            ))
-        return result.scalar_one_or_none()
+        return await db.get(cls.model, id)
+
+    @classmethod
+    async def exists(cls, db: AsyncSession, value, name_fill: str = 'id') -> bool:
+        subquery = select(cls.model.id).filter(getattr(cls.model, name_fill) == value)
+        exists_query = select(exists(subquery))
+        (exists_entry,) = (await db.execute(exists_query)).one()
+        return exists_entry
 
     @classmethod
     async def all(cls, db: AsyncSession):

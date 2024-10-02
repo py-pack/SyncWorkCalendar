@@ -71,7 +71,7 @@ class JiraWorklogDTO(BaseModel):
     jr_issues_key: Optional[str] = None
     description: str = None
     jr_worker_key: Optional[str] = None
-    started_at: date = None
+    started_at: datetime = None
     duration: int = None
     created_at: datetime = None
     updated_at: datetime = None

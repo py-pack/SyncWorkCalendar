@@ -14,7 +14,7 @@ class JRWorklog(Base):
     meta: Mapped[dict] = mapped_column(JSON, nullable=True)
 
     jr_worker_key: Mapped[str] = mapped_column(String, nullable=True, index=True)
-    started_at: Mapped[datetime] = mapped_column(Date(), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,10 +1,12 @@
 from typing import List
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, RowMapping
+
 from .base_dao import BaseDAO
 from src.dao import JRUsersDAO, JRProjectDAO
 from src.models import JRIssue
 from src.services.jira import JiraIssueDTO, JiraUserDTO, JiraProjectDTO
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class JRIssuesDAO(BaseDAO):
@@ -35,3 +37,10 @@ class JRIssuesDAO(BaseDAO):
 
         service_jira_issue = JRIssuesDAO()
         await service_jira_issue.update_by_keys(db, issues)
+
+    @classmethod
+    async def get_in_keys(cls, db: AsyncSession, keys: list[str] | set[str]) -> list[RowMapping]:
+        query = await db.execute(
+            select(JRIssue.id, JRIssue.key).where(JRIssue.key.in_(keys))
+        )
+        return list(query.mappings().all())

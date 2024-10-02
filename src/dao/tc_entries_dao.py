@@ -39,9 +39,8 @@ class TCEntriesDAO(BaseDAO):
 
         await cls._sync(db, entries, entries_db)
 
-    @classmethod
     async def get_entries_for_worklogs(
-        cls, db: AsyncSession,
+        self, db: AsyncSession,
         date_from: datetime,
         date_to: datetime
     ) -> list[WorklogTaskDTO]:
@@ -51,6 +50,7 @@ class TCEntriesDAO(BaseDAO):
                 TCEntry.description,
                 TCEntry.meta,
                 TCEntry.start_at,
+                TCEntry.end_at,
                 TCEntry.duration,
                 TCProject.issue_key,
             )
@@ -72,11 +72,15 @@ class TCEntriesDAO(BaseDAO):
         for entry in entries:
             if entry.meta and entry.meta.get('task'):
                 issue_key = entry.meta.get('task')
-                content = entry.description
             else:
                 issue_key = entry.issue_key
-                content = entry.description
 
+            content = self._create_content_by_template(
+                entry.description,
+                issue_key,
+                entry.start_at,
+                entry.end_at
+            )
             result.append(WorklogTaskDTO(
                 status=StatusTaskEnum.pre_create,
                 source_id=entry.id,
@@ -86,5 +90,14 @@ class TCEntriesDAO(BaseDAO):
                 started_at=entry.start_at,
                 time_spent=entry.duration,
             ))
+
+        return result
+
+    def _create_content_by_template(self, content: str, key: str, start: datetime, end: datetime) -> str:
+        content = content.replace(key, "").strip(" -")
+
+        result = f"sync|{start.strftime("%H:%M")}|{end.strftime("%H:%M")}"
+        if content:
+            result += f" - {content}"
 
         return result

@@ -2,7 +2,7 @@ import requests
 
 from typing import List, Any
 from .dto import JiraUserDTO, JiraIssueDTO, JiraProjectDTO, JiraWorklogDTO
-from datetime import datetime
+from datetime import datetime, date
 
 
 class JiraService:
@@ -126,6 +126,23 @@ class JiraService:
         ) for worklog in worklogs]
 
         return result
+
+    def create_worklog(self, worker: str, issue_id: int, comment: str, start: datetime, duration: int) -> dict:
+        data = {
+            "worker": worker,
+            "originTaskId": issue_id,
+            "comment": comment,
+            "started": start.strftime('%Y-%m-%dT%H:%M:%S.000'),
+            "timeSpentSeconds": duration,
+        }
+
+        worklogs = self._make_request(
+            'tempo-timesheets/4/worklogs',
+            method='POST',
+            data=data
+        )
+
+        return dict(worklogs[0])
 
     def _make_request(
         self,

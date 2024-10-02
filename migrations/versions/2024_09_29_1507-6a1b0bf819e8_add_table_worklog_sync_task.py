@@ -40,7 +40,7 @@ def upgrade() -> None:
         sa.Column("issue_id", sa.Integer(), nullable=True, index=True),
 
         sa.Column("content", sa.String(), nullable=True),
-        sa.Column("started_at", sa.Date(), nullable=False),
+        sa.Column("started_at", sa.TIMESTAMP(timezone=True), nullable=False),
 
         sa.Column("time_spent", sa.Integer(), nullable=False),
 

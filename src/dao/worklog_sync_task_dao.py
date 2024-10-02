@@ -11,12 +11,22 @@ class WorklogSyncTaskDAO(BaseDAO):
     model = WorklogSyncTask
 
     @classmethod
-    async def get_keys_period(cls, db: AsyncSession, start_date: datetime, end_date: datetime) -> set[str]:
+    async def get_by_period_and_status(
+        cls,
+        db: AsyncSession,
+        start_date: datetime,
+        end_date: datetime,
+        status: StatusTaskEnum | None
+    ) -> list[WorklogSyncTask]:
+        conditions = [
+            WorklogSyncTask.started_at >= datetime.combine(start_date.date(), time.min),
+            WorklogSyncTask.started_at <= datetime.combine(end_date.date(), time.max),
+        ]
+
+        if status:
+            conditions.append(WorklogSyncTask.status == status)
+
         keys_query = await db.execute(
-            select(WorklogSyncTask.issue_key).where(and_(
-                WorklogSyncTask.status == StatusTaskEnum.pre_create,
-                WorklogSyncTask.started_at >= datetime.combine(start_date.date(), time.min),
-                WorklogSyncTask.started_at <= datetime.combine(end_date.date(), time.max),
-            ))
+            select(cls.model).where(and_(*conditions))
         )
-        return set(keys_query.scalars().all())
+        return list(keys_query.scalars().all())

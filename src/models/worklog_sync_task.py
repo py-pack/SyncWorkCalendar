@@ -28,7 +28,7 @@ class WorklogSyncTask(Base):
     issue_key: Mapped[str] = mapped_column(String, nullable=False)
     issue_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)
     content: Mapped[str] = mapped_column(String, nullable=True)
-    started_at: Mapped[date] = mapped_column(Date(), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     time_spent: Mapped[int] = mapped_column(Integer, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -4,14 +4,17 @@ from sqlalchemy import update
 
 from src.core import get_async_asession
 from src.dao import TCProjectDAO, TCEntriesDAO, WorklogSyncTaskDAO, JRIssuesDAO
-from src.models import TCProject, TCEntry, WorklogSyncTask
+from src.models import TCProject, TCEntry, WorklogSyncTask, StatusTaskEnum
+from src.services.jira import JiraService
 
-from .jira_update_task import UpdateJiraTask
+from src.config import settings
+
+from src.tasks.jira_update_task import UpdateJiraTask
 
 
 class WorllogSyncTask:
     def __init__(self):
-        pass
+        self.jira_client = JiraService(settings.jira.token)
 
     @classmethod
     async def create_task_for_sync(cls, start_date: datetime, end_date: datetime):
@@ -31,7 +34,13 @@ class WorllogSyncTask:
     async def before_create(cls, start_date: datetime, end_date: datetime):
 
         async with get_async_asession() as db:
-            all_keys_task = await WorklogSyncTaskDAO.get_keys_period(db, start_date, end_date)
+            all_tasks: list[WorklogSyncTask] = await WorklogSyncTaskDAO.get_by_period_and_status(
+                db,
+                start_date,
+                end_date,
+                status=StatusTaskEnum.pre_create
+            )
+            all_keys_task = set(task.issue_key for task in all_tasks)
             keys_jr = await JRIssuesDAO.get_in_keys(db, all_keys_task)
 
             keys_except = all_keys_task - set(jr.key for jr in keys_jr)
@@ -41,11 +50,31 @@ class WorllogSyncTask:
                 await jira_service.update_jira_issues(keys_except)
 
             jira_id_keys = await JRIssuesDAO.get_in_keys(db, all_keys_task)
+            jira_key_dict = {jirad.key: jirad.id for jirad in jira_id_keys}
 
-            for jira in jira_id_keys:
-                await db.execute(
-                    update(WorklogSyncTask).where(
-                        WorklogSyncTask.issue_key == jira.key
-                    ).values(issue_id=jira.id)
+            for task in all_tasks:
+                task.issue_id = jira_key_dict.get(task.issue_key)
+                task.status = StatusTaskEnum.create
+                await db.commit()
+
+    async def create_worklogs(self, start_date: datetime, end_date: datetime):
+        async with get_async_asession() as db:
+            all_tasks: list[WorklogSyncTask] = await WorklogSyncTaskDAO.get_by_period_and_status(
+                db,
+                start_date,
+                end_date,
+                status=StatusTaskEnum.create
+            )
+
+            for wlst in all_tasks:
+                result = self.jira_client.create_worklog(
+                    settings.current_user,
+                    int(wlst.issue_id),
+                    wlst.content,
+                    wlst.started_at,
+                    wlst.time_spent
                 )
+
+                wlst.target_id = result.get('originId')
+                wlst.status = StatusTaskEnum.created
                 await db.commit()

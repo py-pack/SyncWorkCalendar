@@ -16,7 +16,7 @@ class UpdateJiraTask:
             service_project = JRProjectDAO()
             await service_project.sync_all(db, jira_projects)
 
-    async def update_jira_issues(self, key_issues: list):
+    async def update_jira_issues(self, key_issues: list | set):
         """
         Обновить все issue Jira для определенных ключей
 
@@ -48,7 +48,7 @@ class UpdateJiraTask:
             worklogs = service.serch_worklogs_by_user(start_time, end_time, settings.current_user)
 
             dao = JRWorklogDAO()
-            await dao.sync_all_between(db,worklogs, start_time, end_time)
+            await dao.sync_all_between(db, worklogs, start_time, end_time)
 
             jira_updates_keys = list(set(worklog.jr_issues_key for worklog in worklogs))
             await self.update_jira_issues(jira_updates_keys)

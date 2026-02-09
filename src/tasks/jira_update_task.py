@@ -47,6 +47,9 @@ class UpdateJiraTask:
             service = JiraService(settings.jira.token)
             worklogs = service.serch_worklogs_by_user(start_time, end_time, settings.current_user)
 
+            if len(worklogs) == 0:
+                return
+
             dao = JRWorklogDAO()
             await dao.sync_all_between(db, worklogs, start_time, end_time)
 

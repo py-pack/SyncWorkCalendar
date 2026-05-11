@@ -75,6 +75,7 @@ python main.py
 - `Jira (on-prem)`: GET `api/2/project`, POST `api/2/search` (JQL).
 - `Tempo`: POST `tempo-timesheets/4/worklogs`, POST `tempo-timesheets/4/worklogs/search`.
 - Усі запити проходять через `_make_request` у відповідному `*Service`-класі.
+- Глибока довідка по TimeCamp — [../technical/integrations/timecamp.md](../technical/integrations/timecamp.md).
 
 ## Стандарти коду
 

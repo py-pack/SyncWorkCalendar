@@ -87,3 +87,9 @@ sync                             (зарезервовано)
   event-хука, де `await` неможливий.
 - `naming_convention` для констрейнтів задається в `DatabaseConfig` і прокидається
   в `Base.metadata`, щоб міграції генерувались зі стабільними іменами.
+
+## Деталізовані описи інтеграцій
+
+- [TimeCamp](../technical/integrations/timecamp.md) — клієнт, DTO, моделі, DAO,
+  парсинг `description`, повний DDL таблиць `tc_projects`, `tc_entries`,
+  `key_templates`.

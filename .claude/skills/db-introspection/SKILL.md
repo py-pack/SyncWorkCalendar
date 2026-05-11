@@ -8,16 +8,45 @@ description: Inspect the local PostgreSQL database (db_swc) of Sync Work Calenda
 Як швидко й точно отримати структуру/дані локальної Postgres БД проекту
 (`db_swc`, контейнер `leadsdoit/postgres:17.7`, host-port `11101 → 5432`).
 
-Дві джерела істини, у порядку пріоритету:
+Три джерела, у порядку пріоритету:
 
-1. **PyCharm MCP** (`mcp__pycharm__*`) — читає **живу БД** через JetBrains
-   DataGrip-конект. Найточніше: реальні типи, дефолти, індекси, FK, дані.
-2. **Alembic + SQLAlchemy моделі** — офлайн-фолбек, якщо PyCharm не запущений
+1. **Тех-доки в `docs/technical/database/`** — готовий ground-truth-снапшот
+   живої БД: повна таблиця колонок/типів/індексів (`schema.md`), Mermaid
+   ER-діаграма, потік даних і state-machine (`erd.md`). Найшвидший
+   look-up, без виклику IDE. Деталі — §0 нижче.
+2. **PyCharm MCP** (`mcp__pycharm__*`) — читає **живу БД** через JetBrains
+   DataGrip-конект. Використовуй для верифікації, коли є підозра, що
+   тех-доки застаріли, або щоб подивитись прев'ю даних.
+3. **Alembic + SQLAlchemy моделі** — офлайн-фолбек, якщо PyCharm не запущений
    або БД не піднята. Показує **намір** (як має бути за міграціями), а не
    фактичний стан.
 
-> Завжди починай з MCP. Переходь на Alembic, лише якщо MCP недоступний або
-> треба історія змін схеми.
+> Спершу читай тех-доки. MCP — для звірки / preview-даних. Alembic — лише
+> офлайн або коли потрібна історія змін.
+
+---
+
+## 0. Тех-доки по БД
+
+Розташування: [docs/technical/database/](../../../docs/technical/database/).
+
+| Файл                                                         | Що всередині                                                                            |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| [`README.md`](../../../docs/technical/database/README.md)    | індекс теки + правило синхронізації                                                     |
+| [`schema.md`](../../../docs/technical/database/schema.md)    | повна таблиця колонок (тип, NN, default, нотатки), keys/indices, enum-и, sequences, soft-links, quirks |
+| [`erd.md`](../../../docs/technical/database/erd.md)          | Mermaid ER-діаграма, data-flow, state-machine `worklog_sync_status_task_enum`           |
+
+На що покладатись:
+
+- «Які колонки/типи у таблиці X?» — `schema.md` §2-5.
+- «Як таблиці зв'язані між собою?» — `erd.md` §1 (ER) або `schema.md` §8 (soft-links).
+- «Як заповнюється `worklog_sync_tasks` і куди йде далі?» — `erd.md` §2 (flow).
+- «Які значення enum статусу?» — `schema.md` §6 або `erd.md` §3.
+- «Що з тех-боргом по БД?» — `schema.md` §9.
+
+Поточний `alembic head`, записаний у `schema.md` — `b4117e0c3dd4` (на 2026-05-11).
+Якщо коментар у файлі розходиться з `alembic current` — доки застаріли,
+див. §8 «Sync rule».
 
 ---
 
@@ -201,14 +230,17 @@ docker compose up -d db
 
 | Питання                                    | Краще                          |
 | ------------------------------------------ | ------------------------------ |
-| «Які колонки і типи у таблиці X?»          | MCP `get_database_object_description` |
+| «Які колонки і типи у таблиці X?»          | `docs/technical/database/schema.md` (fallback — MCP `get_database_object_description`) |
+| «Як таблиці зв'язані?»                     | `docs/technical/database/erd.md` (ER + soft-links) |
+| «Який data flow / state-machine?»          | `docs/technical/database/erd.md` |
 | «Покажи 20 рядків з таблиці X»             | MCP `preview_table_data`       |
-| «Які індекси/FK на X?»                     | MCP `get_database_object_description` |
-| «Які взагалі таблиці є?»                   | MCP `list_schema_objects`      |
+| «Які індекси на X?»                        | `schema.md` або MCP `get_database_object_description` |
+| «Які взагалі таблиці є?»                   | `schema.md` §1 або MCP `list_schema_objects` |
 | «Як змінювалась колонка Y у часі?»         | Alembic (`migrations/versions/`) |
 | «Чи відстає БД від коду?»                  | `alembic current` + `alembic heads` |
 | «Як описана модель у ORM (relationship-и, події)?» | `src/models/*.py`     |
-| MCP/PyCharm недоступний                    | Alembic + моделі               |
+| Підозра, що `schema.md` застарів           | MCP — звір живу БД з доком (§8) |
+| MCP/PyCharm недоступний                    | `schema.md` + Alembic          |
 
 ---
 
@@ -223,3 +255,49 @@ docker compose up -d db
   Tools → Manage Shown Schemas`), або виклич із `selectedOnly: false`.
 - Чутливих даних у таблицях нема (worklog-и, ключі задач), але токени
   `TC`/`Jira` сидять у `.env` — їх ці інструменти не повертають.
+
+---
+
+## 8. Sync rule — код і доки тримаємо синхронно
+
+Тех-доки в `docs/technical/database/` — це **снапшот**, а не автогенерація.
+Якщо вони розійдуться з реальністю, вони стануть джерелом помилок гірше,
+ніж їх відсутність. Тому:
+
+**Тригери, коли доки треба оновити в тому самому коміті:**
+
+- Нова/змінена колонка чи таблиця в `src/models/*.py`.
+- Нова alembic-ревізія в `migrations/versions/` (особливо `op.add_column`,
+  `op.alter_column`, `op.create_table`, `op.create_index`, `op.execute(...)`
+  з DDL).
+- Новий enum або зміна значень `StatusTaskEnum` (чи інших enum-ів).
+- Нова soft-link залежність між таблицями (новий `primaryjoin`,
+  новий `_key`-стовпчик, що логічно показує на іншу таблицю).
+- Зміна state-machine у `WorllogSyncTask` (нові переходи / стани).
+- Новий event-listener, що пише в `meta` чи інші колонки.
+
+**Що саме оновлювати:**
+
+| Зміна                                          | `schema.md` | `erd.md` |
+| ---------------------------------------------- | ----------- | -------- |
+| Додано/прибрано/перейменовано колонку          | §2–5 (рядок таблиці) | §1 (entity-блок) |
+| Додано/прибрано таблицю                        | новий розділ + §8 soft-links | §1 entity + §2 flow |
+| Додано/прибрано індекс або UNIQUE              | «Keys / indices» під таблицею | — |
+| Новий soft-link                                | §8           | §1 (relationship-стрілка) |
+| Нова alembic-ревізія, що змінює DDL            | §5 (alembic head) + §9 (якщо тех-борг) | — |
+| Зміна enum                                     | §6           | §3 (state-diagram) |
+| Зміна state-machine переходів                  | §6           | §3       |
+| Новий data-flow крок (новий зовнішній API)     | (як впливає) | §2 (flow) |
+
+**Послідовність дій:**
+
+1. Зробити зміну в коді/міграції.
+2. Прогнати alembic: `alembic upgrade head` локально.
+3. Звірити з MCP — `mcp__pycharm__get_database_object_description` по
+   зачепленим таблицям. Скопіювати поточний DDL.
+4. Оновити `schema.md` і (за потреби) `erd.md`.
+5. Якщо змінився alembic head — поновити рядок у вступі `schema.md`.
+6. Закомітити доки разом із кодом/міграцією — **одним PR**.
+
+Якщо доки не оновлено, code review мають це впіймати. Розбіжності між
+доками і MCP — баг, не «застарілий док».

@@ -30,6 +30,10 @@
 - Дані лежать у `.db/data`, дампи у `.db/dump`.
 - Змінні: `APP__DB__HOST/PORT/DATABASE/USER/PASSWORD` + `ECHO`, `ECHO_POOL`,
   `POOL_SIZE`, `MAX_OVERFLOW`.
+- Тех-доки по БД — тека [../technical/database/](../technical/database/):
+  `schema.md` (поля, типи, індекси, soft-links, quirks) і `erd.md`
+  (Mermaid ER, data flow, state-machine). Як інтроспектувати БД наживо —
+  скіл `db-introspection`.
 
 ## Конфігурація
 

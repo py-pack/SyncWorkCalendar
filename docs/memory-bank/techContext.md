@@ -80,6 +80,7 @@ python main.py
 - `Tempo`: POST `tempo-timesheets/4/worklogs`, POST `tempo-timesheets/4/worklogs/search`.
 - Усі запити проходять через `_make_request` у відповідному `*Service`-класі.
 - Глибока довідка по TimeCamp — [../technical/integrations/timecamp.md](../technical/integrations/timecamp.md).
+- Глибока довідка по Jira + Tempo — [../technical/integrations/jira.md](../technical/integrations/jira.md).
 
 ## Стандарти коду
 

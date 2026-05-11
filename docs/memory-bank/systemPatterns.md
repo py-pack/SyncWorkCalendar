@@ -93,3 +93,8 @@ sync                             (зарезервовано)
 - [TimeCamp](../technical/integrations/timecamp.md) — клієнт, DTO, моделі, DAO,
   парсинг `description`, повний DDL таблиць `tc_projects`, `tc_entries`,
   `key_templates`.
+- [Jira + Tempo](../technical/integrations/jira.md) — `JiraService` (4
+  endpoint-и для `api/2` + `tempo-timesheets/4`), DTO, моделі `jr_*`,
+  каскадне `JRIssuesDAO.sync_by_key`, `UpdateJiraTask`, state-machine
+  `WorllogSyncTask` (pre_create → create → created), парсинг
+  `sync|HH:MM|HH:MM - content` у `JRWorklog.meta`.

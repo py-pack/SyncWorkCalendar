@@ -28,6 +28,20 @@
 - При додаванні нового `JRProject` ключа не покладайся на `SyncTaskService`
   кеш — TTL 2 год (`D-003`).
 
+## OpenSpec
+
+Проект під OpenSpec. Структура — `openspec/changes/` + `openspec/specs/`.
+Робочий цикл:
+
+- `/openspec-explore` — продумати ідею до пропозиції.
+- `/openspec-propose <name>` — створити `proposal.md` + `design.md` + `tasks.md`
+  у `openspec/changes/<name>/`.
+- `/openspec-apply-change` — виконати таски.
+- `/openspec-archive-change` — закрити і перенести у `openspec/changes/archive/`.
+
+Скіли глобальні; локальних копій у `.claude/skills/` чи `.agents/skills/`
+не створюємо.
+
 ## Запуск
 
 Деталі команд (Poetry, Alembic, Docker) — у `techContext.md`.

@@ -6,10 +6,27 @@
 
 ## Поточний фокус
 
-Активної задачі, прив'язаної до фічі/інциденту, **немає**. У робочій директорії
-лежить незакомічена правка `main.ipynb` (зміна періоду запуску — `start =
-datetime(2026, 4, 8)`, `finish = datetime(2026, 4, 13)`), яка швидше за все
-відображає експлуатаційний запуск, а не нову розробку.
+**Активна OpenSpec-зміна:** [`add-rest-api`](../../openspec/changes/add-rest-api/)
+— REST API на FastAPI поверх існуючих тасків. Стан: артефакти готові
+(`proposal.md`, `design.md`, `specs/{api-auth,api-sync-status,api-sync-triggers,api-tc-projects-management}/spec.md`,
+`tasks.md`), валідовано через `openspec validate add-rest-api`. Готово до
+imple­ment-фази через `/openspec-apply-change`.
+
+Скоп зміни — single-user JWT auth, read-endpoint-и стану синхронізації,
+REST-обгортки навколо `TimeCampUpdateTask` / `UpdateJiraTask` /
+`WorllogSyncTask` і PATCH для `tc_projects.is_sync` / `issue_key`.
+
+Поряд лежить незакомічена правка `main.ipynb` (період запуску
+`2026-04-08 .. 2026-04-13`), яка відображає експлуатаційний запуск, не
+нову розробку.
+
+## Як це вписується в roadmap
+
+`add-rest-api` — етап 1 траєкторії, описаної в
+[`projectbrief.md`](projectbrief.md). Майбутні етапи (автоматичний
+планувальник, власний трекер замість TimeCamp, multi-user масштаб) на
+поточний скоуп змін не впливають, але мотивують multi-user-ready вибори
+в `decisinLog.md` → D-009.
 
 ## Нещодавні зміни (за git log)
 
@@ -24,9 +41,9 @@ datetime(2026, 4, 8)`, `finish = datetime(2026, 4, 13)`), яка швидше з
 
 ## Активні відкриті питання
 
-- **HTTP-шар відсутній.** `FastAPI` і `uvicorn` у залежностях, але `src/api/`
-  порожній і `main.py` запускає синхронну логіку напряму. Рішення про
-  HTTP-обгортку ще не прийняте — див. `decisinLog.md`.
+- **HTTP-шар у роботі.** Рішення прийнято через OpenSpec `add-rest-api`
+  (див. `openspec/changes/add-rest-api/design.md`). Імплементація ще не
+  стартувала — `src/api/` порожній.
 - **Сценарій оновлення worklog-ів.** Статуси `pre_update/update/updated` в
   `StatusTaskEnum` зарезервовані, але не використовуються. Потрібно вирішити,
   коли і за яким триггером оновлювати раніше синхронізовані записи.

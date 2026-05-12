@@ -20,9 +20,17 @@
 - `create_worklogs` — викликає `Tempo` POST `worklogs`, зберігає `target_id`
   і переводить таски в `created`.
 
+## Що в роботі (OpenSpec)
+
+- [`add-rest-api`](../../openspec/changes/add-rest-api/) — FastAPI REST API:
+  auth (single-user JWT), read-endpoint-и стану синхронізації, sync-triggers
+  навколо існуючих тасків, PATCH для `tc_projects.is_sync`/`issue_key`.
+  Артефакти готові, очікує `/openspec-apply-change`.
+
 ## Що не реалізовано
 
-- HTTP API на `FastAPI` — залежності встановлені, але `src/api/` порожній.
+- HTTP API на `FastAPI` — залежності встановлені, `src/api/` порожній.
+  Закривається через `add-rest-api` (див. вище).
 - Сценарій оновлення (`pre_update → update → updated`) — статуси оголошені,
   логіки немає.
 - Видалення раніше створених worklog-ів у `Tempo`.

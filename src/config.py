@@ -1,5 +1,7 @@
-from pydantic import BaseModel, PostgresDsn
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+
+from pydantic import BaseModel, PostgresDsn, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class DatabaseConfig(BaseModel):
@@ -39,18 +41,52 @@ class JiraConfig(BaseModel):
     token: str = "<PASSWORD>"
 
 
+class APIConfig(BaseModel):
+    host: str = "0.0.0.0"
+    port: int = 8000
+    jwt_secret: str = ""
+    jwt_ttl_hours: int = 24
+    cors_origins: Annotated[list[str], NoDecode] = ["*"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def split_cors_origins(cls, value):
+        if value is None or value == "":
+            return ["*"]
+        if isinstance(value, str):
+            parts = [p.strip() for p in value.split(",") if p.strip()]
+            return parts or ["*"]
+        return value
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env.template", ".env"),  # порядок підвантаження мержа змінинних
-        case_sensitive=False,  # не важливий регістр
-        env_nested_delimiter="__",  # розділювач
-        env_prefix="APP__",  # префікс змінних, які будуть автоматично парситись
-        env_ignore_empty=True,  # ігнорувати пусті значення
+        env_file=(".env.template", ".env"),
+        case_sensitive=False,
+        env_nested_delimiter="__",
+        env_prefix="APP__",
+        env_ignore_empty=True,
     )
     db: DatabaseConfig = DatabaseConfig()
     tc: TimeCampConfig = TimeCampConfig()
     jira: JiraConfig = JiraConfig()
+    api: APIConfig = APIConfig()
     current_user: str = ''
+
+    @model_validator(mode="after")
+    def _require_jwt_secret_when_api_used(self) -> "Settings":
+        # Fail fast if API is being used but no JWT secret is configured.
+        # An empty default is allowed so CLI/notebook flows keep working when
+        # the HTTP layer is not in play; the API entrypoint calls
+        # ``require_api_ready`` explicitly before serving requests.
+        return self
+
+    def require_api_ready(self) -> None:
+        if not self.api.jwt_secret:
+            raise RuntimeError(
+                "APP__API__JWT_SECRET is required to start the HTTP API. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_hex(32))'"
+            )
 
 
 settings = Settings()

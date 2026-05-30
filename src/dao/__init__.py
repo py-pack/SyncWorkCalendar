@@ -11,6 +11,9 @@ __all__ = (
 
     "KeyTemplateDAO",
     "WorklogSyncTaskDAO",
+
+    "APIUserDAO",
+    "APIJobDAO",
 )
 
 from .tc_project_dao import TCProjectDAO
@@ -23,3 +26,6 @@ from .jr_worklog_dao import JRWorklogDAO
 
 from .key_template_dao import KeyTemplateDAO
 from .worklog_sync_task_dao import WorklogSyncTaskDAO
+
+from .api_user_dao import APIUserDAO
+from .api_job_dao import APIJobDAO

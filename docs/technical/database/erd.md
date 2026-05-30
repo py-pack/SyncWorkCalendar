@@ -11,7 +11,7 @@
 
 ## 1. Entity-Relationship Diagram
 
-Усі 8 доменних таблиць + системна `alembic_version` опущена.
+Усі 8 доменних таблиць + 2 API-таблиці. Системна `alembic_version` опущена.
 
 ```mermaid
 erDiagram
@@ -123,6 +123,32 @@ erDiagram
         varchar issue_key "цільовий Jira key"
         varchar template "/regex/ або substring"
     }
+
+    api_users ||..o{ api_jobs : "username (created_by / verified_by)"
+
+    api_users {
+        int id PK
+        varchar username UK
+        varchar password_hash "bcrypt"
+        varchar worker_key "Jira key, у JWT-claim"
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    api_jobs {
+        uuid id PK "gen_random_uuid()"
+        varchar trigger_name "sync.timecamp.entries"
+        enum status "api_job_status_enum"
+        jsonb payload
+        jsonb result
+        text error
+        varchar created_by "→ api_users.username"
+        varchar verified_by "→ api_users.username"
+        timestamptz started_at
+        timestamptz finished_at
+        timestamptz verified_at
+    }
 ```
 
 ### Легенда кардинальностей
@@ -213,6 +239,24 @@ stateDiagram-v2
 
 Деталі переходів — `src/models/worklog_sync_task.py` + хук
 `WorllogSyncTask.before_create` / `create_worklogs`.
+
+---
+
+## 3a. State machine — `api_job_status_enum`
+
+```mermaid
+stateDiagram-v2
+    [*]                  --> running             : POST /sync/** (auth + validate OK)
+    running              --> needs_verification  : task завершується без exception
+    running              --> failed              : task піднімає exception
+    needs_verification   --> verified            : POST /api-jobs/{id}/verify
+    verified             --> [*]
+    failed               --> [*]
+```
+
+`verified` і `failed` — final-стани. Із `needs_verification` повторити синк
+не можна — для повтору викликається той самий sync-endpoint, що створює нову
+job-row. Деталі — `src/api/jobs_wrapper.py` + `src/dao/api_job_dao.py`.
 
 ---
 

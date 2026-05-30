@@ -3,7 +3,13 @@
 ## Шари
 
 ```
-main.py / main.ipynb
+HTTP клієнт (curl, Swagger UI, майбутній frontend)
+   │
+   ▼
+src/api/                     ← FastAPI: app, routers, schemas, deps, auth, jobs_wrapper
+   │       └─► run_job(...)  ← context manager → INSERT/UPDATE api_jobs (своя сесія)
+   │
+main.py / main.ipynb         ← альтернативна (legacy) точка входу
    │
    ▼
 src/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog tasks)
@@ -15,6 +21,15 @@ src/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog t
             ▼
        src/models/*          ← SQLAlchemy 2.x Declarative моделі
 ```
+
+- `src/api/app.py` — `create_app()` factory; `lifespan` валідує
+  `APP__API__JWT_SECRET`; включає CORS-middleware і глобальні exception
+  handler-и для `SQLAlchemyError` (500) і `requests.RequestException` (502).
+- `src/api/jobs_wrapper.run_job(...)` — async-контекстний менеджер навколо
+  sync-endpoint-а: `INSERT api_jobs.running` → yield `ctx` → `UPDATE
+  needs_verification + ctx.result` на normal-exit / `UPDATE failed + error`
+  на exception. Wrapper тримає **окрему сесію**, щоб audit-row лишався
+  навіть коли request-сесія відкочується.
 
 - `src/core/db_helper.py` тримає глобальний `async_engine`, `sync_engine`
   і контекст-менеджер `get_async_asession()` (автокоміт на виході, rollback при
@@ -79,6 +94,20 @@ sync                             (зарезервовано)
 Перехід `pre_create → create` робить `WorllogSyncTask.before_create`,
 перехід `create → created` — `WorllogSyncTask.create_worklogs` після успішного
 виклику `Tempo` API.
+
+## State machine — `APIJobStatusEnum`
+
+```
+running → needs_verification → verified     (success path)
+running → failed                            (exception path)
+```
+
+- `running → needs_verification`: `jobs_wrapper.run_job` на normal-exit.
+- `running → failed`: `jobs_wrapper.run_job` на exception (потім re-raise).
+- `needs_verification → verified`: `POST /api-jobs/{id}/verify` (атомарна
+  перевірка в `APIJobDAO.mark_verified`).
+- `verified` і `failed` — final-стани. Verify на final → `409 Conflict`,
+  verify на `running` → `409 Conflict` ("job has not finished yet").
 
 ## Конвенції коду
 

@@ -2,19 +2,26 @@
 
 ## Дата оновлення
 
-2026-05-11 — Memory Bank ініціалізовано на основі поточного стану `main`.
+2026-05-13 — після imple­ment-фази `add-rest-api`.
 
 ## Поточний фокус
 
 **Активна OpenSpec-зміна:** [`add-rest-api`](../../openspec/changes/add-rest-api/)
-— REST API на FastAPI поверх існуючих тасків. Стан: артефакти готові
-(`proposal.md`, `design.md`, `specs/{api-auth,api-sync-status,api-sync-triggers,api-tc-projects-management}/spec.md`,
-`tasks.md`), валідовано через `openspec validate add-rest-api`. Готово до
-imple­ment-фази через `/openspec-apply-change`.
+— REST API на FastAPI поверх існуючих тасків. Стан: **код імплементовано**
+(2026-05-13). Залишилось:
 
-Скоп зміни — single-user JWT auth, read-endpoint-и стану синхронізації,
-REST-обгортки навколо `TimeCampUpdateTask` / `UpdateJiraTask` /
-`WorllogSyncTask` і PATCH для `tc_projects.is_sync` / `issue_key`.
+1. **Ручний QA через Swagger UI** (фаза 11 у `tasks.md`) — створити
+   тестового юзера ручним INSERT (інструкція в
+   `docs/technical/api-reference.md` § «Перший користувач»), пройти всі
+   smoke-test сценарії (`/auth/login`, sync-trigger → `api_jobs.needs_verification`
+   → verify → `verified`, failure-сценарій, empty-table-сценарій).
+2. **Архівація** через `/openspec-archive-change add-rest-api` після
+   успішного QA.
+
+Скоп зміни — single-user JWT auth (схема multi-user-ready),
+read-endpoint-и стану синхронізації, REST-обгортки навколо
+`TimeCampUpdateTask` / `UpdateJiraTask` / `WorllogSyncTask` з обгорткою
+`api_jobs`, PATCH для `tc_projects.is_sync` / `issue_key`.
 
 Поряд лежить незакомічена правка `main.ipynb` (період запуску
 `2026-04-08 .. 2026-04-13`), яка відображає експлуатаційний запуск, не
@@ -41,14 +48,15 @@ REST-обгортки навколо `TimeCampUpdateTask` / `UpdateJiraTask` /
 
 ## Активні відкриті питання
 
-- **HTTP-шар у роботі.** Рішення прийнято через OpenSpec `add-rest-api`
-  (див. `openspec/changes/add-rest-api/design.md`). Імплементація ще не
-  стартувала — `src/api/` порожній.
+- **HTTP-шар: ручний QA.** Код готовий, але без ручного проходу через
+  Swagger UI не вважається завершеним. Блокується створенням першого юзера
+  через `INSERT` (CLI для керування — окрема майбутня зміна).
 - **Сценарій оновлення worklog-ів.** Статуси `pre_update/update/updated` в
   `StatusTaskEnum` зарезервовані, але не використовуються. Потрібно вирішити,
   коли і за яким триггером оновлювати раніше синхронізовані записи.
 - **Назва `worllog_sync_task.py`.** Файл і клас містять одрук (`worllog` замість
-  `worklog`). Перейменування зачепить імпорти — поки не виправлено.
+  `worklog`). Перейменування зачепить імпорти — поки не виправлено
+  (`decisinLog.md` → D-008).
 
 ## Найближчі кроки (як орієнтир для агентів)
 

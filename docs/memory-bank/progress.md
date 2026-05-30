@@ -22,28 +22,45 @@
 
 ## Що в роботі (OpenSpec)
 
-- [`add-rest-api`](../../openspec/changes/add-rest-api/) — FastAPI REST API:
-  auth (single-user JWT), read-endpoint-и стану синхронізації, sync-triggers
-  навколо існуючих тасків, PATCH для `tc_projects.is_sync`/`issue_key`.
-  Артефакти готові, очікує `/openspec-apply-change`.
+- [`add-rest-api`](../../openspec/changes/add-rest-api/) — FastAPI REST API
+  імплементовано (2026-05-13): auth (single-user JWT з multi-user-ready
+  схемою `api_users`), `api_jobs` із кроком `needs_verification`,
+  read-endpoint-и стану синхронізації, sync-triggers навколо існуючих
+  тасків, PATCH для `tc_projects.is_sync`/`issue_key`. Залишилось:
+  ручний QA через Swagger UI (фаза 11 у `tasks.md`), архівація через
+  `/openspec-archive-change`. Тех-довідка — `docs/technical/api-reference.md`.
+
+## Що працює (HTTP API)
+
+- FastAPI app (`src/api/app.py`) із CORS і глобальними exception handler-ами.
+- JWT auth (`/auth/login`, `/auth/refresh`, `/auth/me`) поверх `api_users`.
+- `api_jobs` lifecycle (`running → needs_verification → verified`, або
+  `running → failed`) — wrapper `src/api/jobs_wrapper.run_job`.
+- Read-endpoints: `/tc-projects` (з `entries_count`), `/jr-projects` (з
+  `issues_count`), `/worklog-sync-tasks` (із summary), `/tc-entries/untracked`.
+- PATCH `/tc-projects/{id}` з `extra=forbid` і регексом для `issue_key`.
+- 8 sync-trigger endpoint-ів з опційним `?background=true`.
 
 ## Що не реалізовано
 
-- HTTP API на `FastAPI` — залежності встановлені, `src/api/` порожній.
-  Закривається через `add-rest-api` (див. вище).
 - Сценарій оновлення (`pre_update → update → updated`) — статуси оголошені,
   логіки немає.
 - Видалення раніше створених worklog-ів у `Tempo`.
 - Тести (юніт/інтеграційні) і CI.
-- Робота кількох користувачів — `current_user` один на конфіг.
+- Управління користувачами через API/CLI — закривається через окрему
+  майбутню зміну `add-user-management-cli`. Зараз — ручний INSERT (інструкція
+  в `api-reference.md`).
+- TTL/cron для старих `api_jobs` — `add-api-jobs-cleanup`.
+- RBAC, per-user OAuth-токени на Jira/TimeCamp — окремі майбутні зміни.
 
 ## Поточний стан гілки
 
 - Branch: `main`.
-- Незакомічене: `M main.ipynb` (зміна періоду на 2026-04-08…2026-04-13).
-- Остання міграція: `b4117e0c3dd4` (2024-10-02).
-- Алембік head відповідає поточним моделям — нових міграцій не потрібно
-  (станом на 2026-05-11).
+- Незакомічене: `M main.ipynb` (зміна періоду на 2026-04-08…2026-04-13)
+  плюс імпементація `add-rest-api` (нові файли `src/api/`, `src/models/api_*.py`,
+  `src/dao/api_*_dao.py`, `run_api.py`, alembic-ревізія `ef2c7288bbb0`).
+- Остання міграція: `ef2c7288bbb0` (2026-05-13, `add_api_layer_tables`).
+- Алембік head відповідає поточним моделям після застосування ревізії.
 
 ## Відомі тех-борги
 

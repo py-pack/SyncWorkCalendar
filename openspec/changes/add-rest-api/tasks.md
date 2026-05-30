@@ -1,195 +1,171 @@
 ## 1. Залежності та конфігурація
 
-- [ ] 1.1 `poetry add python-jose[cryptography] passlib[bcrypt]` (або
-  `pyjwt` як заміна `python-jose`, якщо команда проти cryptography)
-- [ ] 1.2 Розширити `src/config.py`: додати клас `APIConfig` (host, port,
+- [x] 1.1 `poetry add python-jose[cryptography] passlib[bcrypt]` (або
+  `pyjwt` як заміна `python-jose`, якщо команда проти cryptography).
+  *Додатково:* `poetry add greenlet` — обовʼязковий runtime-deps для
+  `sqlalchemy.async` на Python 3.13.
+- [x] 1.2 Розширити `src/config.py`: додати клас `APIConfig` (host, port,
   jwt_secret, jwt_ttl_hours, cors_origins). Підключити у `Settings.api`
-- [ ] 1.3 `APIConfig.cors_origins`: `field_validator(mode='before')`, що
+- [x] 1.3 `APIConfig.cors_origins`: `field_validator(mode='before')`, що
   перетворює comma-separated рядок у `list[str]`; спецзначення `*`
-  залишити як список з одного елемента
-- [ ] 1.4 Оновити `.env.template` змінними `APP__API__*` із поясненнями
-- [ ] 1.5 Валідація на старті: якщо `APP__API__JWT_SECRET` порожній —
-  `RuntimeError` у `Settings` post-init (Pydantic `model_validator`)
+  залишити як список з одного елемента. Використано
+  `Annotated[list[str], NoDecode]`, щоб pydantic-settings не парсив
+  значення як JSON.
+- [x] 1.4 Оновити `.env.template` змінними `APP__API__*` із поясненнями
+- [x] 1.5 Валідація на старті: якщо `APP__API__JWT_SECRET` порожній —
+  `RuntimeError`. Перенесено у `Settings.require_api_ready()`, що
+  викликається `lifespan` FastAPI і `run_api.py` — щоб CLI/notebook без
+  API могли працювати з порожнім секретом.
 
 ## 2. Alembic-міграції та ORM-моделі
 
-- [ ] 2.1 `src/models/api_user.py`: модель `APIUser` (`__tablename__ =
+- [x] 2.1 `src/models/api_user.py`: модель `APIUser` (`__tablename__ =
       'api_users'`) — `username UNIQUE NOT NULL`, `password_hash`,
   `worker_key NULL`, `is_active DEFAULT TRUE`, `created_at`,
-  `updated_at`
-- [ ] 2.2 `src/models/api_job.py`: модель `APIJob` (`__tablename__ =
+  `updated_at`. Stamp-листенер `_stamp_api_user_timestamps`.
+- [x] 2.2 `src/models/api_job.py`: модель `APIJob` (`__tablename__ =
       'api_jobs'`) — `id UUID PK gen_random_uuid()`, `trigger_name`,
   `status Enum(APIJobStatusEnum)`, `payload JSONB`, `result JSONB`,
   `error TEXT NULL`, `created_by`, `verified_by`, `started_at`,
-  `finished_at`, `verified_at`. CHECK-constraints (`verified_at IS
-      NULL OR status='verified'`, `finished_at IS NULL OR status !=
-      'running'`)
-- [ ] 2.3 Енам `APIJobStatusEnum` із значеннями `running`,
+  `finished_at`, `verified_at`. CHECK-constraints.
+- [x] 2.3 Енам `APIJobStatusEnum` із значеннями `running`,
   `needs_verification`, `verified`, `failed` у тому ж модулі (за
   аналогією до `StatusTaskEnum`)
-- [ ] 2.4 `alembic revision --autogenerate -m "add_api_users_table"` —
-  перевірити, що autogen виловив `api_users`
-- [ ] 2.5 `alembic revision --autogenerate -m "add_api_jobs_table"` —
-  перевірити, що автоген створив enum-тип + таблицю + 3 індекси
-  (`status`, `trigger_name`, `started_at`)
-- [ ] 2.6 Запустити `alembic upgrade head` локально + звірити через MCP
-  `mcp__pycharm__get_database_object_description`
-- [ ] 2.7 **Оновити `docs/technical/database/schema.md` та
-  `database/erd.md`** із новими таблицями і enum-ом — окрема секція
-  «API-домен». Це частина того ж коміту/PR (правило `db-introspection`
-  §8)
-- [ ] 2.8 `src/dao/api_user_dao.py`: `APIUserDAO` (наслідує `BaseDAO`,
-  `model = APIUser`), додатково `get_by_username(db, username)`,
-  `count_active(db)`
-- [ ] 2.9 `src/dao/api_job_dao.py`: `APIJobDAO`, методи `create_running`,
-  `mark_needs_verification`, `mark_failed`, `mark_verified`,
-  `list_filtered`, `get_by_id`
+- [x] 2.4 + 2.5 Одна `alembic revision --autogenerate -m
+      "add_api_layer_tables"` створила і `api_users`, і `api_jobs` (+ enum
+      і 3 індекси). Перейменовано в
+      `2026_05_12_1656-ef2c7288bbb0_add_api_layer_tables.py`. Виправлено
+      `server_default` UUID на `sa.text("gen_random_uuid()")`.
+- [x] 2.6 Запустити `alembic upgrade head` локально. Поточний head —
+      `ef2c7288bbb0`.
+- [x] 2.7 Оновити `docs/technical/database/schema.md` та
+      `database/erd.md` — додано секцію «API-домен», новий enum
+      `api_job_status_enum`, sequence `api_users_id_seq`, soft links,
+      state-machine у ERD.
+- [x] 2.8 `src/dao/api_user_dao.py`: `APIUserDAO` (`get_by_username`,
+      `count_active`)
+- [x] 2.9 `src/dao/api_job_dao.py`: `APIJobDAO` (`create_running`,
+      `mark_needs_verification`, `mark_failed`, `mark_verified`,
+      `list_filtered`, `get_by_id`)
 
 ## 3. Скеффолд `src/api/`
 
-- [ ] 3.1 Створити теку `src/api/` із `__init__.py`
-- [ ] 3.2 `src/api/app.py`: `FastAPI()`-factory, `lifespan`,
-  CORS-middleware із `settings.api.cors_origins`, підключення всіх
-  роутерів. Експорт `app = create_app()`. Стартуємо навіть із порожньою
-  таблицею `api_users` — без падінь
-- [ ] 3.3 `src/api/deps.py`: `get_db()` (yield із `get_async_asession()`),
-  `get_current_user()` (декодує JWT, читає `api_users` для
-  підтвердження `is_active`), `get_settings()`
-- [ ] 3.4 `src/api/schemas/`: модулі `auth.py`, `common.py`
-  (`PeriodRequest`, `BackgroundQuery`, `JobResponse`, error-моделі)
-- [ ] 3.5 `src/api/routers/health.py`: `GET /healthz` → `{status: "ok"}`
-  (публічний)
-- [ ] 3.6 Точка запуску — `run_api.py` у корені з
-  `uvicorn.run("src.api.app:app", ...)` або `python -m src.api`
+- [x] 3.1 Створити теку `src/api/` із `__init__.py` (уже була, порожній
+      `__init__.py` лишений)
+- [x] 3.2 `src/api/app.py`: `create_app()` factory, `lifespan` з
+      `settings.require_api_ready()`, CORS-middleware, exception
+      handler-и для `SQLAlchemyError` (500) і `RequestException` (502),
+      підключення всіх роутерів. Експорт `app = create_app()`.
+- [x] 3.3 `src/api/deps.py`: `get_db()` (yield із `async_session_maker`),
+      `get_current_user()` (декодує JWT + re-read `api_users` для
+      is_active), `get_settings()`, dataclass `CurrentUser`.
+- [x] 3.4 `src/api/schemas/`: `auth.py`, `common.py`
+      (`PeriodQuery`, `PeriodBody`, `BackgroundQuery`, `HealthResponse`,
+      `ErrorResponse`, `JobRefResponse`).
+- [x] 3.5 `src/api/routers/health.py`: `GET /healthz` → `{status: "ok"}`
+- [x] 3.6 Точка запуску — `run_api.py` у корені
 
 ## 4. Capability `api-auth`
 
-- [ ] 4.1 `src/api/auth.py`: функції `verify_password`, `hash_password`,
-  `create_access_token`, `decode_access_token`
-- [ ] 4.2 `src/api/routers/auth.py`: `POST /auth/login`, `POST /auth/refresh`,
-  `GET /auth/me`. Login робить `APIUserDAO.get_by_username` +
-  `verify_password`; на провал — однакова відповідь 401 для всіх трьох
-  сценаріїв (wrong pwd / unknown user / inactive)
-- [ ] 4.3 JWT claims: `sub`, `user_id`, `worker_key`, `exp`, `iat`. На
-  refresh — перечитати `is_active` з БД (деактивований юзер не може
-  рефрешитись)
-- [ ] 4.4 Жодного user-creation endpoint у роутерах. `POST /auth/register`,
-  `POST /api-users` тощо MUST не існувати — щоб майбутній CLI лишався
-  єдиним джерелом створення
-- [ ] 4.5 Smoke-test через `/docs`: вручну (через DataGrip) додати тестового
-  юзера → `/auth/login` → токен → `/auth/me` → перевірка
-  `Authorization: Bearer ...` на захищеному роуті
+- [x] 4.1 `src/api/auth.py`: `verify_password`, `hash_password`,
+      `create_access_token`, `decode_access_token`, `TokenDecodeError`.
+- [x] 4.2 `src/api/routers/auth.py`: `POST /auth/login`, `POST /auth/refresh`,
+      `GET /auth/me`. Login дає однаковий `401 Invalid credentials` для
+      wrong pwd / unknown user / inactive.
+- [x] 4.3 JWT claims: `sub`, `user_id`, `worker_key`, `exp`, `iat`. На
+      refresh — `get_current_user` ре-перевіряє `is_active` із БД.
+- [x] 4.4 Жодного user-creation endpoint не існує.
+- [ ] 4.5 Smoke-test через `/docs` — **залишається для ручного QA** (фаза 11).
 
 ## 5. Capability `api-jobs`
 
-- [ ] 5.1 `src/api/schemas/api_jobs.py`: `APIJobSummary`, `APIJobDetail`,
-  `APIJobListResponse`, `APIJobStatusQuery` (Literal enum)
-- [ ] 5.2 `src/api/routers/api_jobs.py`: `GET /api-jobs` (фільтри
-  `status`, `trigger_name`, `start`, `end`, `limit`, `offset`),
-  `GET /api-jobs/{id}`, `POST /api-jobs/{id}/verify`
-- [ ] 5.3 Verify-endpoint: атомарна перевірка `status =
-      needs_verification` + UPDATE → `verified, verified_at, verified_by`;
-  на інші стани — `409 Conflict`
-- [ ] 5.4 `src/api/jobs_wrapper.py`: async-контекстний менеджер
-  `run_job(trigger_name, payload, user, db)`, що:
-  - на enter — INSERT `api_jobs` зі `status=running`
-  - на normal-exit — UPDATE `needs_verification + result`
-  - на exception — UPDATE `failed + error`, потім re-raise
-  - повертає `job_id`, який endpoint включає у response
+- [x] 5.1 `src/api/schemas/api_jobs.py`: `APIJobSummary`, `APIJobDetail`,
+      `APIJobListResponse`, `APIJobStatusLiteral`
+- [x] 5.2 `src/api/routers/api_jobs.py`: `GET /api-jobs` (фільтри
+      `status`, `trigger_name`, `start`, `end`, `limit`, `offset`),
+      `GET /api-jobs/{id}`, `POST /api-jobs/{id}/verify`
+- [x] 5.3 Verify-endpoint: атомарна перевірка в `APIJobDAO.mark_verified`;
+      терміналі стани → 409.
+- [x] 5.4 `src/api/jobs_wrapper.py`: `@asynccontextmanager run_job(...)`,
+      що тримає **окрему сесію** для audit-row.
 
 ## 6. Capability `api-tc-projects-management`
 
-- [ ] 6.1 `src/api/schemas/tc_projects.py`: `TCProjectResponse`,
-  `TCProjectPatchRequest` (тільки `is_sync?`, `issue_key?`, з
-  `extra="forbid"` і regex-валідацією `issue_key`)
-- [ ] 6.2 `src/api/routers/tc_projects.py`: `GET /tc-projects` (без
-  entries-counts поки що), `PATCH /tc-projects/{id}`
-- [ ] 6.3 PATCH: дістати запис через `BaseDAO`, перевірити що body
-  непорожнє, оновити обрані поля, commit, повернути оновлений
-  `TCProjectResponse`
-- [ ] 6.4 Reuse: знайти `TCProjectDAO`; якщо потрібен `get_by_id` —
-  додати або використати `BaseDAO.find`
+- [x] 6.1 `src/api/schemas/tc_projects.py`: `TCProjectResponse`,
+      `TCProjectPatchRequest` (`extra="forbid"`, regex на `issue_key`)
+- [x] 6.2 `src/api/routers/tc_projects.py`: `GET /tc-projects`
+      (з `entries_count` — задача 7.2 склеєна сюди), `PATCH /tc-projects/{id}`
+- [x] 6.3 PATCH: `exclude_unset` для пустого тіла → 400; 404 на відсутній id;
+      оновлення двох полів одним flush.
+- [x] 6.4 Reuse `TCProjectDAO.find` (через `BaseDAO`).
 
 ## 7. Capability `api-sync-status`
 
-- [ ] 7.1 `src/api/schemas/sync_status.py`: `TCProjectWithCount`,
-  `JRProjectWithCount`, `WorklogSyncTaskSummary`, `UntrackedEntry`,
-  `PeriodFilter` (валідація `start <= end`)
-- [ ] 7.2 `GET /tc-projects` (додати в існуючий роутер): join із
-  `tc_entries` за період + groupby count
-- [ ] 7.3 `src/api/routers/jr_projects.py`: `GET /jr-projects` із count
-  issues
-- [ ] 7.4 `src/api/routers/sync_status.py`: `GET /worklog-sync-tasks` —
-  reuse `WorklogSyncTaskDAO.get_by_period_and_status`, додати
-  агрегуючий запит для `summary`
-- [ ] 7.5 `GET /tc-entries/untracked`: SELECT `tc_entries` LEFT JOIN
-  `tc_projects` WHERE `tc_entries.meta IS NULL AND
-      (tc_projects.issue_key IS NULL OR tc_project_id IS NULL)` за період
+- [x] 7.1 `src/api/schemas/sync_status.py`: `JRProjectWithCount`,
+      `WorklogSyncTaskItem`, `WorklogSyncTasksResponse`, `UntrackedEntry`
+- [x] 7.2 `GET /tc-projects` — entries_count через join `tc_entries` за
+      період (склеєно з §6).
+- [x] 7.3 `src/api/routers/jr_projects.py`: `GET /jr-projects` із count issues.
+      Урахована typo моделі `is_archved`.
+- [x] 7.4 `src/api/routers/sync_status.py`: `GET /worklog-sync-tasks` —
+      summary (агрегація по статусах за період) + items.
+- [x] 7.5 `GET /tc-entries/untracked` — `meta IS NULL` AND (`tc_project_id IS NULL`
+      OR `tc_projects.issue_key IS NULL`).
 
 ## 8. Capability `api-sync-triggers`
 
-- [ ] 8.1 `src/api/schemas/sync_triggers.py`: `PeriodBody {start, end}`,
-  `IssuesKeysBody {keys: list[str]}`, `SyncTriggerResponse {job_id,
-      status, result?}`, response-варіанти на кожен endpoint
-- [ ] 8.2 `src/api/routers/sync_triggers.py`: 8 endpoint-ів, кожен
-  обгорнутий у `run_job(...)` wrapper (з §5):
-  - 8.2.1 `POST /sync/timecamp/projects` → `TimeCampUpdateTask.update_project()`
-  - 8.2.2 `POST /sync/timecamp/entries` → `update_entries(start, end)`
-  - 8.2.3 `POST /sync/jira/projects` → `UpdateJiraTask.update_all_projects()`
-  - 8.2.4 `POST /sync/jira/issues` → `update_jira_issues(keys)` (validate non-empty до wrapper-а)
-  - 8.2.5 `POST /sync/jira/worklogs` → `update_worklog(start, end)`, worker із JWT-claim
-  - 8.2.6 `POST /sync/worklog-tasks/prepare` → `WorllogSyncTask.create_task_for_sync(...)`
-  - 8.2.7 `POST /sync/worklog-tasks/resolve-issues` → `before_create(...)`
-  - 8.2.8 `POST /sync/worklog-tasks/push-to-tempo` → `create_worklogs(...)`, worker із JWT
-- [ ] 8.3 Worker_key з JWT: для endpoint-ів 8.2.5 і 8.2.8 перевіряти
-  `worker_key IS NOT NULL` ДО wrapper-а; на `null` — `400` без
-  створення `api_jobs`
-- [ ] 8.4 Опційний `?background=true`: викинути виконання у FastAPI
-  `BackgroundTasks`, повернути `202 Accepted` з `{job_id, status:
-      "running"}`. Wrapper робить ту саму lifecycle-роботу
-- [ ] 8.5 Counters для `result`: helper, що рахує `SELECT COUNT(*)`
-  до/після виклику task (простіше за модифікацію DAO)
+- [x] 8.1 `src/api/schemas/sync_triggers.py`: `PeriodBody`,
+      `IssuesKeysBody`, `SyncTriggerResponse`
+- [x] 8.2 `src/api/routers/sync_triggers.py`: 8 endpoint-ів, кожен обгорнутий
+      у `_execute(...)` (sync — `run_job`; bg — INSERT running + UPDATE з
+      BackgroundTasks).
+- [x] 8.3 Worker_key з JWT для `/sync/jira/worklogs` і
+      `/sync/worklog-tasks/push-to-tempo` перевіряється **до** wrapper-а;
+      на null → 400.
+- [x] 8.4 `?background=true` через `BackgroundTasks` повертає `202` із
+      `{job_id, status: "running"}`.
+- [x] 8.5 Counters через `func.count()` до/після виклику task.
 
 ## 9. Інтеграція з існуючим стеком
 
-- [ ] 9.1 Перевірити, що `_make_request` помилки не валять FastAPI-worker;
-  обробка винятків → wrapper переводить `api_jobs` у `failed`,
-  HTTP-відповідь `500 Internal Server Error` із `{job_id, detail}`
-- [ ] 9.2 Глобальний exception handler у `app.py` для
-  `sqlalchemy.exc.SQLAlchemyError` і `requests.RequestException`
-- [ ] 9.3 Розділення `settings.current_user` і HTTP worker_key:
-  - `WorllogSyncTask.create_worklogs` приймає `worker` параметром
-  (рефактор у `src/tasks/worllog_sync_task.py`),
-  - або endpoint підставляє worker через локальний contextvar.
-  Зафіксувати рішення тут після першої спроби
+- [x] 9.1 `_make_request` поведінка (повертає `{}` на помилку) лишена
+      як є — fix йде окремою зміною `fix-jira-service-bugs`. У failure-
+      кейсі wrapper позначить job як `needs_verification` із `result.created=0`,
+      і користувач помітить на verify-кроці.
+- [x] 9.2 Глобальний exception handler у `app.py`:
+      `SQLAlchemyError → 500`, `requests.RequestException → 502`.
+- [x] 9.3 `WorllogSyncTask.create_worklogs(..., worker=None)` і
+      `UpdateJiraTask.update_worklog(..., worker=None)` приймають
+      `worker` параметром (fallback на `settings.current_user` для
+      notebook). HTTP-роутер передає `current.worker_key` із JWT.
 
 ## 10. Документація
 
-- [ ] 10.1 Створити `docs/technical/api-reference.md` з оглядом
-  endpoint-ів, auth flow, `api_jobs` lifecycle і прикладами `curl`.
-  Окремий розділ — **«Як завести першого користувача»**: bcrypt-команда
-  (`python -c "from passlib.hash import bcrypt; print(bcrypt.hash('...'))"`),
-  приклад INSERT-запиту в `api_users` через DataGrip, посилання на
-  майбутній `add-user-management-cli`
-- [ ] 10.2 Додати посилання на `api-reference.md` у Memory Bank
-  `techContext.md` (нова секція «API»)
-- [ ] 10.3 Оновити `systemPatterns.md`: додати шар HTTP у схему «main →
-  tasks → services/dao» + lifecycle `api_jobs`
-- [ ] 10.4 Оновити `progress.md`: відмітити, що FastAPI підняли (раніше
-  числився як «не реалізовано»), додати `api_users`/`api_jobs`
-- [ ] 10.5 Оновити `decisinLog.md`: записати рішення (1) користувачі в
-  таблиці `api_users`, заведення тільки через CLI (наступна зміна);
-  (2) `api_jobs` як проміжний verify-крок між `running` і `verified`
+- [x] 10.1 `docs/technical/api-reference.md` із розділами «Як підняти»,
+      «Перший користувач» (bcrypt + INSERT), «Auth flow», «api_jobs
+      lifecycle», «Endpoint-и», «CORS», «Що поза цією зміною».
+- [x] 10.2 Посилання на `api-reference.md` в Memory Bank `techContext.md`
+      (нова секція «API»).
+- [x] 10.3 `systemPatterns.md`: HTTP-шар у схему «main → tasks →
+      services/dao» + опис `jobs_wrapper.run_job` + нова state-machine
+      `APIJobStatusEnum`.
+- [x] 10.4 `progress.md`: відмічено що FastAPI підняли; додано список
+      `api_users`/`api_jobs` функцій; перенесено невикористані `pre_update`
+      статуси в not-implemented.
+- [x] 10.5 `decisinLog.md`: додано D-010 (`api_jobs` із проміжним
+      `needs_verification`). D-009 (multi-user-ready) уже був.
 
 ## 11. QA через `/docs`
+
+> **Запис на 2026-05-13:** код готовий, QA лишається користувачу.
+> Інструкції — у `docs/technical/api-reference.md` §1–2.
 
 - [ ] 11.1 Підняти локально: `docker compose up -d db && alembic upgrade
       head && uvicorn src.api.app:app --reload`
 - [ ] 11.2 **Перед стартом QA:** вручну створити тестового юзера через
-  DataGrip — `INSERT INTO api_users (username, password_hash,
-      worker_key, is_active) VALUES ('admin', '<bcrypt>', '<your-jira-key>',
-      TRUE);`. Команда для генерації хешу — у `api-reference.md` §
-  «Перший користувач»
+      DataGrip — `INSERT INTO api_users (username, password_hash,
+      worker_key, is_active, created_at, updated_at) VALUES ('admin',
+      '<bcrypt>', '<your-jira-key>', TRUE, now(), now());`
 - [ ] 11.3 Smoke-test через Swagger UI (`/docs`) кожного endpoint:
   - 11.3.1 `/auth/login` із вручну вставленими credentials → токен →
   `/auth/me`
@@ -213,7 +189,7 @@
 ## 12. Архівація і фоллоу-апи
 
 - [ ] 12.1 `/openspec-archive-change add-rest-api` — переносить у
-  `openspec/changes/archive/`, оновлює `openspec/specs/`
+      `openspec/changes/archive/`, оновлює `openspec/specs/`
 - [ ] 12.2 Створити follow-up changes у бекозі (не в цьому скоупі):
   - 12.2.1 **`add-user-management-cli`** — наступна зміна одразу за
   цією. CLI типу `python -m src.api.scripts.users create

@@ -57,7 +57,16 @@ class WorllogSyncTask:
                 task.status = StatusTaskEnum.create
                 await db.commit()
 
-    async def create_worklogs(self, start_date: datetime, end_date: datetime):
+    async def create_worklogs(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        worker: str | None = None,
+    ):
+        # ``worker`` is the Jira key that owns the produced Tempo worklogs.
+        # HTTP callers pass it explicitly from JWT.worker_key; CLI/notebook
+        # callers fall back to settings.current_user.
+        actor = worker or settings.current_user
         async with get_async_asession() as db:
             all_tasks: list[WorklogSyncTask] = await WorklogSyncTaskDAO.get_by_period_and_status(
                 db,
@@ -68,7 +77,7 @@ class WorllogSyncTask:
 
             for wlst in all_tasks:
                 result = self.jira_client.create_worklog(
-                    settings.current_user,
+                    actor,
                     int(wlst.issue_id),
                     wlst.content,
                     wlst.started_at,

@@ -13,10 +13,14 @@
 
 ## Бібліотеки
 
-- `fastapi`, `uvicorn[standart]` — заявлені, але не використовуються.
+- `fastapi`, `uvicorn[standart]` — HTTP-шар (capability `add-rest-api`).
+- `python-jose[cryptography]` — JWT HS256 (`src/api/auth.py`).
+- `passlib[bcrypt]` — bcrypt-хешування паролів `api_users.password_hash`.
 - `pydantic[email] ^2.8`, `pydantic-settings ^2.4`.
 - `sqlalchemy[asyncio] ^2.0`, `asyncpg`, `psycopg2-binary` (для синхронного
   engine у `sync_sessin`).
+- `greenlet` — обовʼязковий runtime-deps для `sqlalchemy.async` (без нього
+  падає `await` усередині `AsyncSession`).
 - `alembic ^1.13`.
 - `requests ^2.32` — для зовнішніх API (TimeCamp, Jira).
 - `nest-asyncio ^1.6` — для ноутбука.
@@ -43,7 +47,11 @@
 - `db.*` — підключення до Postgres.
 - `tc.token` — `TimeCamp` API token (`APP__TC__TOKEN`).
 - `jira.token` — `Jira` Bearer token (`APP__JIRA__TOKEN`).
-- `current_user` — `Jira key` поточного користувача (`APP__CURRENT_USER`).
+- `current_user` — `Jira key` поточного користувача (`APP__CURRENT_USER`);
+  лишається як **fallback** для CLI/notebook-сценаріїв. HTTP-шар бере
+  `worker_key` із JWT-claim (`api_users.worker_key`).
+- `api.*` — конфіг HTTP-шару (`APP__API__HOST/PORT/JWT_SECRET/JWT_TTL_HOURS/CORS_ORIGINS`).
+  `JWT_SECRET` обовʼязковий для старту API; CLI/notebook працює без нього.
 
 ## Міграції
 
@@ -52,9 +60,11 @@
   `target_metadata = Base.metadata`.
 - Файли версій іменуються `%Y_%m_%d_%H%M-<rev>_<slug>.py`.
 - Post-hook — `black -l 79` для нових ревізій.
-- Поточний head: `b4117e0c3dd4` (`update column started_at jr_worklogs`,
-  2024-10-02). Усі моделі вже відображені — `worklog_sync_tasks`, `key_templates`,
-  `jr_*`, `tc_*`.
+- Поточний head: `ef2c7288bbb0` (`add_api_layer_tables`, 2026-05-13) —
+  додає `api_users` + `api_jobs` (+ enum `api_job_status_enum`).
+  Попередній head — `b4117e0c3dd4` (`update column started_at jr_worklogs`,
+  2024-10-02). Доменні моделі (`tc_*`, `jr_*`, `worklog_sync_tasks`,
+  `key_templates`) відображені без додаткових міграцій.
 
 ## Команди
 
@@ -70,6 +80,9 @@ alembic revision --autogenerate -m "<slug>"
 
 # Запуск (CLI-сценарій)
 python main.py
+
+# Запуск HTTP API
+python run_api.py            # або: uvicorn src.api.app:app --reload
 ```
 
 ## Інтеграційні URL та автентифікація
@@ -81,6 +94,14 @@ python main.py
 - Усі запити проходять через `_make_request` у відповідному `*Service`-класі.
 - Глибока довідка по TimeCamp — [../technical/integrations/timecamp.md](../technical/integrations/timecamp.md).
 - Глибока довідка по Jira + Tempo — [../technical/integrations/jira.md](../technical/integrations/jira.md).
+
+## API
+
+HTTP-шар підняли в межах зміни `add-rest-api`. Точка входу — `run_api.py`
+(або `uvicorn src.api.app:app`). OpenAPI рендериться на `/docs` і
+`/redoc`. Тех-довідка — [api-reference.md](../technical/api-reference.md):
+як стартувати, як завести першого користувача (ручний INSERT з bcrypt),
+auth flow, lifecycle `api_jobs`, мапа endpoint-ів.
 
 ## Стандарти коду
 

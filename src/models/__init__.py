@@ -9,6 +9,9 @@ __all__ = (
     "WorklogSyncTask",
     "KeyTemplate",
     "StatusTaskEnum",
+    "APIUser",
+    "APIJob",
+    "APIJobStatusEnum",
 )
 
 from .base import Base
@@ -20,3 +23,5 @@ from .jr_issue import JRIssue
 from .jr_worklog import JRWorklog
 from .worklog_sync_task import WorklogSyncTask, StatusTaskEnum
 from .key_template import KeyTemplate
+from .api_user import APIUser
+from .api_job import APIJob, APIJobStatusEnum

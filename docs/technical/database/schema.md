@@ -2,8 +2,8 @@
 
 Ground-truth довідник по схемі локальної Postgres БД `db_swc`. Усі таблиці,
 колонки, типи, ключі, індекси та enum-и зафіксовані з **живої БД** через
-PyCharm DataGrip MCP станом на 2026-05-11. Поточний `alembic head`:
-`b4117e0c3dd4`.
+PyCharm DataGrip MCP станом на 2026-05-13. Поточний `alembic head`:
+`ef2c7288bbb0` (додано `api_users` + `api_jobs` для HTTP-шару).
 
 Якщо схема змінилась — оновити цей файл одним прогоном (див. §9). Усі деталі
 поведінки (як саме поле читається/пишеться) — у інтеграційних доках і
@@ -205,11 +205,80 @@ State-machine — у `../../memory-bank/systemPatterns.md`.
 
 | column        | type        | NN | default | примітка                              |
 | ------------- | ----------- | -- | ------- | ------------------------------------- |
-| `version_num` | varchar(32) | ✓  | —       | PK; поточне значення: `b4117e0c3dd4`  |
+| `version_num` | varchar(32) | ✓  | —       | PK; поточне значення: `ef2c7288bbb0`  |
+
+---
+
+## 5a. API-домен
+
+Таблиці HTTP-шару (capability `api-auth` + `api-jobs`). Жодних FK на доменні
+таблиці (`tc_*`, `jr_*`) — звʼязок `api_users.worker_key ↔ Jira key` тримається
+застосунком (див. §8).
+
+### `api_users`
+
+Користувачі HTTP API. Заведення — **ручний INSERT** (інструкція в
+`docs/technical/api-reference.md` § «Перший користувач»); CLI для керування —
+окрема майбутня зміна `add-user-management-cli`. Schема навмисно multi-user-ready,
+див. `decisinLog.md` → D-009.
+
+| column          | type        | NN | default                            | примітка                                            |
+| --------------- | ----------- | -- | ---------------------------------- | --------------------------------------------------- |
+| `id`            | integer     | ✓  | `nextval('api_users_id_seq')`      | PK                                                  |
+| `username`      | varchar     | ✓  | —                                  | UNIQUE (`uq_api_users_username`); імʼя для login    |
+| `password_hash` | varchar     | ✓  | —                                  | bcrypt-хеш                                          |
+| `worker_key`    | varchar     |    | —                                  | Jira key для sync-trigger-ів; null → 400 на worklog-енд |
+| `is_active`     | boolean     | ✓  | —                                  | `false` → login завжди повертає 401                 |
+| `created_at`    | timestamptz | ✓  | —                                  | ставиться event-листенером `_stamp_api_user_timestamps` |
+| `updated_at`    | timestamptz | ✓  | —                                  | оновлюється тим же листенером перед UPDATE          |
+
+### `api_jobs`
+
+Журнал sync-операцій. Кожен `POST /sync/**` створює рядок зі `status=running`,
+потім перехід у `needs_verification` (після успіху) або `failed`. Ручний
+`POST /api-jobs/{id}/verify` переводить у `verified`. Деталі lifecycle — у
+`docs/technical/api-reference.md` і `decisinLog.md` → D-010.
+
+| column         | type                   | NN | default                | примітка                                            |
+| -------------- | ---------------------- | -- | ---------------------- | --------------------------------------------------- |
+| `id`           | uuid                   | ✓  | `gen_random_uuid()`    | PK; UUID, бо джерело id — додаток, не sequence      |
+| `trigger_name` | varchar                | ✓  | —                      | напр. `sync.timecamp.entries`; INDEX                |
+| `status`       | `api_job_status_enum`  | ✓  | —                      | див. §6; INDEX                                      |
+| `payload`      | jsonb                  |    | —                      | request body або query                              |
+| `result`       | jsonb                  |    | —                      | counts після успіху                                 |
+| `error`        | text                   |    | —                      | str(exception) при `failed`                         |
+| `created_by`   | varchar                | ✓  | —                      | `api_users.username` (без FK)                       |
+| `verified_by`  | varchar                |    | —                      | `api_users.username` верифікатора                   |
+| `started_at`   | timestamptz            | ✓  | —                      | INDEX; час входу в endpoint                         |
+| `finished_at`  | timestamptz            |    | —                      | заповнюється при переході зі `running`              |
+| `verified_at`  | timestamptz            |    | —                      | заповнюється лише при `verified`                    |
+
+CHECK-constraints:
+
+- `ck_api_jobs_verified_at_only_when_verified`: `verified_at IS NULL OR status = 'verified'`
+- `ck_api_jobs_finished_at_only_when_not_running`: `finished_at IS NULL OR status <> 'running'`
 
 ---
 
 ## 6. Enum-типи
+
+### `api_job_status_enum`
+
+Доменний enum для `api_jobs.status` (`src/models/api_job.py` →
+`APIJobStatusEnum`):
+
+```
+running  →  needs_verification  →  verified    ← основний потік
+running  →  failed                              ← на виключенні
+```
+
+Переходи (`src/api/jobs_wrapper.py`):
+
+- `running → needs_verification` — на нормальний вихід wrapper-а.
+- `running → failed` — на exception, перед re-raise.
+- `needs_verification → verified` — `POST /api-jobs/{id}/verify`.
+
+`verified` і `failed` — final-стани, з них немає виходу.
 
 ### `worklog_sync_status_task_enum`
 
@@ -235,8 +304,11 @@ sync                                    ← зарезервовано
 ```
 jr_issues_id_seq, jr_projects_id_seq, jr_users_id_seq,
 jr_worklogs_id_seq, key_templates_id_seq, tc_entries_id_seq,
-tc_projects_id_seq, worklog_sync_tasks_id_seq
+tc_projects_id_seq, worklog_sync_tasks_id_seq,
+api_users_id_seq
 ```
+
+`api_jobs.id` — UUID, без sequence (PK генерується `gen_random_uuid()` на стороні Postgres).
 
 Для `tc_projects` / `tc_entries` / `jr_worklogs` sequence-и фактично **не
 використовуються** при імпорті — id приходять із зовнішнього API. Sequence
@@ -249,6 +321,16 @@ tc_projects_id_seq, worklog_sync_tasks_id_seq
 ## 8. Soft links (без FK constraint)
 
 Жоден FK не оголошено. Логічні зв'язки:
+
+- `api_jobs.created_by → api_users.username` — пишеться з JWT-claim. UNIQUE
+  гарантує однозначність, але видалення юзера лишить «висячі» рядки `api_jobs`.
+- `api_jobs.verified_by → api_users.username` — те саме.
+- `api_users.worker_key` — це Jira key користувача (напр. `alice`). У JWT-claim
+  кладеться той же worker_key і використовується як параметр sync-тригерів
+  worklog-domain-у (`/sync/jira/worklogs`, `/sync/worklog-tasks/push-to-tempo`).
+  Звʼязок із Jira — поза цією БД.
+
+Інші логічні зв'язки доменних таблиць:
 
 ```
 tc_entries.tc_project_id        →  tc_projects.id

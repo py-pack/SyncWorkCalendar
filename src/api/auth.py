@@ -1,20 +1,27 @@
 """JWT codec + bcrypt password hashing helpers.
 
-The HTTP layer talks to this module instead of poking at ``passlib`` or
+The HTTP layer talks to this module instead of poking at ``bcrypt`` or
 ``jose`` directly; tests can swap implementations here.
 """
 from datetime import datetime, timedelta, UTC
 from typing import Any
 
+import bcrypt
 from jose import ExpiredSignatureError, JWTError, jwt
-from passlib.context import CryptContext
 
 from src.config import settings
 
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 _JWT_ALGORITHM = "HS256"
+
+# bcrypt operates on at most 72 bytes; longer secrets are truncated. We do it
+# explicitly (and identically for hash + verify) so bcrypt 4.x/5.x does not
+# raise on long passwords and verification stays consistent.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _secret_bytes(plain: str) -> bytes:
+    return plain.encode("utf-8")[:_BCRYPT_MAX_BYTES]
 
 
 class TokenDecodeError(Exception):
@@ -26,12 +33,12 @@ class TokenDecodeError(Exception):
 
 
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    return bcrypt.hashpw(_secret_bytes(plain), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
-        return _pwd_context.verify(plain, hashed)
+        return bcrypt.checkpw(_secret_bytes(plain), hashed.encode("utf-8"))
     except ValueError:
         # Malformed hash in the DB — treat as a verification failure rather
         # than crashing the request.

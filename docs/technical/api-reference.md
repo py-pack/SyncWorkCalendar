@@ -35,19 +35,15 @@ OpenAPI: `http://localhost:8000/docs`. Health-check без авторизаці�
 ## 2. Перший користувач
 
 API **не створює юзерів автоматично** — ні через endpoint, ні на старті.
-До появи зміни `add-user-management-cli` юзери заводяться ручним INSERT.
+Юзери заводяться CLI-командою `add_user` (деталі — [cli.md](cli.md)):
 
 ```sh
-# 1) bcrypt-хеш пароля
-uv run python -c "from passlib.hash import bcrypt; print(bcrypt.hash('your-strong-password'))"
-
-# 2) INSERT через PyCharm DataGrip / psql
+uv run python -m src.cli add_user --username admin --worker-key TEAM-1
+# або: make add-user   (питатиме username/password інтерактивно)
 ```
 
-```sql
-INSERT INTO api_users (username, password_hash, worker_key, is_active, created_at, updated_at)
-VALUES ('admin', '<bcrypt-хеш з кроку 1>', '<your-jira-key>', TRUE, now(), now());
-```
+Команда сама хешує пароль (`bcrypt`, формат `$2b$`) і перевіряє дубль по
+`username`. Ручний `INSERT` більше не потрібен.
 
 `worker_key` — твій Jira key. Для логіну, `GET /auth/me`,
 `GET /tc-projects`, верифікації — необовʼязковий, можна `NULL`. Без нього

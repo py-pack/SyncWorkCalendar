@@ -13,7 +13,8 @@
     щоб гнати async усередині ноутбука.
   - `run_api.py` — HTTP API (див. секцію «API»).
   - `python -m src.cli <command>` — argparse-CLI з авто-реєстрацією команд
-    (`src/cli/commands/`); поточна команда — `add_user`.
+    (`src/cli/commands/`); поточна команда — `add_user`. Тех-довідка по
+    модулю і як додати команду — [../technical/cli.md](../technical/cli.md).
 
 ## Бібліотеки
 

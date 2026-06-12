@@ -10,7 +10,8 @@ src/api/                     ← FastAPI: app, routers, schemas, deps, auth, job
    │       └─► run_job(...)  ← context manager → INSERT/UPDATE api_jobs (своя сесія)
    │
 main.py / main.ipynb         ← альтернативна (legacy) точка входу
-   │
+src/cli/*                    ← argparse-CLI з авто-реєстрацією команд
+   │                            (операційні дії; реюз dao/core/auth)
    ▼
 src/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog tasks)
    │

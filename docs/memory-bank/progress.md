@@ -22,18 +22,17 @@
 
 ## Що в роботі (OpenSpec)
 
-- [`add-rest-api`](../../openspec/changes/add-rest-api/) — FastAPI REST API
-  імплементовано (2026-05-13): auth (single-user JWT з multi-user-ready
-  схемою `api_users`), `api_jobs` із кроком `needs_verification`,
-  read-endpoint-и стану синхронізації, sync-triggers навколо існуючих
-  тасків, PATCH для `tc_projects.is_sync`/`issue_key`. Залишилось:
-  ручний QA через Swagger UI (фаза 11 у `tasks.md`), архівація через
-  `/openspec-archive-change`. Тех-довідка — `docs/technical/api-reference.md`.
+- Активних змін немає. Остання — [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
+  — заархівована **2026-06-12**: REST API підтверджено робочим, 5
+  capability-специфікацій злиті в `openspec/specs/`. Тех-довідка —
+  `docs/technical/api-reference.md`.
 
 ## Що працює (HTTP API)
 
 - FastAPI app (`src/api/app.py`) із CORS і глобальними exception handler-ами.
-- JWT auth (`/auth/login`, `/auth/refresh`, `/auth/me`) поверх `api_users`.
+  Старт — `run_api.py` / `make serve` (підтверджено робочим 2026-06-12).
+- JWT auth (`/auth/login`, `/auth/refresh`, `/auth/me`) поверх `api_users`;
+  паролі хешуються прямим `bcrypt` (`src/api/auth.py`, формат `$2b$`).
 - `api_jobs` lifecycle (`running → needs_verification → verified`, або
   `running → failed`) — wrapper `src/api/jobs_wrapper.run_job`.
 - Read-endpoints: `/tc-projects` (з `entries_count`), `/jr-projects` (з
@@ -47,9 +46,10 @@
   логіки немає.
 - Видалення раніше створених worklog-ів у `Tempo`.
 - Тести (юніт/інтеграційні) і CI.
-- Управління користувачами через API/CLI — закривається через окрему
-  майбутню зміну `add-user-management-cli`. Зараз — ручний INSERT (інструкція
-  в `api-reference.md`).
+- Повноцінне управління користувачами через API/CLI — окрема майбутня
+  зміна `add-user-management-cli`. Базовий CLI вже є: `src/cli/` з командою
+  `add_user` (`python -m src.cli add_user`); решта (list/deactivate/змінити
+  пароль/worker_key) — попереду.
 - TTL/cron для старих `api_jobs` — `add-api-jobs-cleanup`.
 - RBAC, per-user OAuth-токени на Jira/TimeCamp — окремі майбутні зміни.
 
@@ -58,7 +58,10 @@
 - Branch: `main`.
 - Незакомічене: `M main.ipynb` (зміна періоду на 2026-04-08…2026-04-13)
   плюс імпементація `add-rest-api` (нові файли `src/api/`, `src/models/api_*.py`,
-  `src/dao/api_*_dao.py`, `run_api.py`, alembic-ревізія `ef2c7288bbb0`).
+  `src/dao/api_*_dao.py`, `run_api.py`, alembic-ревізія `ef2c7288bbb0`),
+  а також сесія 2026-06-12: `src/cli/`, `Makefile`, `.python-version` (3.14),
+  перехід `passlib → bcrypt` у `pyproject.toml`/`src/api/auth.py`,
+  міграція `poetry → uv` (`uv.lock`).
 - Остання міграція: `ef2c7288bbb0` (2026-05-13, `add_api_layer_tables`).
 - Алембік head відповідає поточним моделям після застосування ревізії.
 

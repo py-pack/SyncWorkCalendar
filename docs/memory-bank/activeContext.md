@@ -2,38 +2,43 @@
 
 ## Дата оновлення
 
-2026-05-13 — після imple­ment-фази `add-rest-api`.
+2026-06-12 — після архівації `add-rest-api`.
 
 ## Поточний фокус
 
-**Активна OpenSpec-зміна:** [`add-rest-api`](../../openspec/changes/add-rest-api/)
-— REST API на FastAPI поверх існуючих тасків. Стан: **код імплементовано**
-(2026-05-13). Залишилось:
+**Активних OpenSpec-змін немає.** Зміна
+[`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
+заархівована 2026-06-12: REST API на FastAPI підтверджено робочим
+(сервер стартує через `run_api.py`/`make serve`, ручний smoke-test
+пройдено). Її 5 capability-специфікацій злиті в `openspec/specs/`
+(`api-auth`, `api-jobs`, `api-sync-status`, `api-sync-triggers`,
+`api-tc-projects-management`) і є канонічними.
 
-1. **Ручний QA через Swagger UI** (фаза 11 у `tasks.md`) — створити
-   тестового юзера ручним INSERT (інструкція в
-   `docs/technical/api-reference.md` § «Перший користувач»), пройти всі
-   smoke-test сценарії (`/auth/login`, sync-trigger → `api_jobs.needs_verification`
-   → verify → `verified`, failure-сценарій, empty-table-сценарій).
-2. **Архівація** через `/openspec-archive-change add-rest-api` після
-   успішного QA.
+Під час доведення API до робочого стану (сесія 2026-06-12) додатково:
 
-Скоп зміни — single-user JWT auth (схема multi-user-ready),
-read-endpoint-и стану синхронізації, REST-обгортки навколо
-`TimeCampUpdateTask` / `UpdateJiraTask` / `WorllogSyncTask` з обгорткою
-`api_jobs`, PATCH для `tc_projects.is_sync` / `issue_key`.
-
-Поряд лежить незакомічена правка `main.ipynb` (період запуску
-`2026-04-08 .. 2026-04-13`), яка відображає експлуатаційний запуск, не
-нову розробку.
+- **CLI-модуль `src/cli/`** з авто-реєстрацією команд (за зразком
+  `dom-ex.bot`); перша команда — `add_user` (заводить `api_users` із
+  bcrypt-хешем через `APIUserDAO.create_user`). Запуск:
+  `python -m src.cli add_user` або `make add-user`. Це знімає попередню
+  залежність від ручного `INSERT` першого користувача.
+- **Хешування паролів переведено з `passlib` на прямий `bcrypt`**
+  (`src/api/auth.py`) — `passlib` 1.7.4 несумісний із `bcrypt` 5.x на
+  Python 3.14 (`decisinLog.md` → D-011). Формат хешу `$2b$` збережено,
+  логін сумісний.
+- **Python запінено на 3.14** через `.python-version` (узгоджено з
+  `dom-ex.bot`); `requires-python` лишається `>=3.12,<4.0`.
+- **`Makefile`** з шорткатами поверх `uv run`: `serve`, `dev`, `cli`,
+  `add-user`, `sync`.
 
 ## Як це вписується в roadmap
 
-`add-rest-api` — етап 1 траєкторії, описаної в
-[`projectbrief.md`](projectbrief.md). Майбутні етапи (автоматичний
+`add-rest-api` — завершений етап 1 траєкторії з
+[`projectbrief.md`](projectbrief.md). Наступні етапи (автоматичний
 планувальник, власний трекер замість TimeCamp, multi-user масштаб) на
-поточний скоуп змін не впливають, але мотивують multi-user-ready вибори
-в `decisinLog.md` → D-009.
+поточний код не впливають, але мотивували multi-user-ready вибори в
+`decisinLog.md` → D-009. Незакомічена правка `main.ipynb` (період
+`2026-04-08 .. 2026-04-13`) відображає експлуатаційний запуск, не нову
+розробку.
 
 ## Нещодавні зміни (за git log)
 
@@ -48,9 +53,6 @@ read-endpoint-и стану синхронізації, REST-обгортки н
 
 ## Активні відкриті питання
 
-- **HTTP-шар: ручний QA.** Код готовий, але без ручного проходу через
-  Swagger UI не вважається завершеним. Блокується створенням першого юзера
-  через `INSERT` (CLI для керування — окрема майбутня зміна).
 - **Сценарій оновлення worklog-ів.** Статуси `pre_update/update/updated` в
   `StatusTaskEnum` зарезервовані, але не використовуються. Потрібно вирішити,
   коли і за яким триггером оновлювати раніше синхронізовані записи.

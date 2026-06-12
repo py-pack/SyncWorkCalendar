@@ -44,4 +44,4 @@
 
 ## Запуск
 
-Деталі команд (Poetry, Alembic, Docker) — у `techContext.md`.
+Деталі команд (uv, Alembic, Docker) — у `techContext.md`.

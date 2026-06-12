@@ -2,20 +2,26 @@
 
 ## Runtime
 
-- **Python** `^3.12`, менеджер залежностей — `poetry` (`pyproject.toml`,
-  `poetry.lock`).
+- **Python** `>=3.12,<4.0`, фактично запінено на **3.14** через
+  `.python-version` (узгоджено з `dom-ex.bot`). Менеджер залежностей — `uv`
+  (`pyproject.toml`, `uv.lock`; `poetry.lock` видалено).
 - **Entry points**:
-  - `python main.py` — лінійний скрипт `sync_time_camp()` + `sync_jira()`
+  - `uv run main.py` — лінійний скрипт `sync_time_camp()` + `sync_jira()`
     (хардкод періоду `2024-07-01 .. 2024-07-31`).
   - `main.ipynb` — інтерактивна оркестрація через `TimeCampUpdateTask`,
     `UpdateJiraTask`, `WorllogSyncTask`. Використовує `nest_asyncio.apply()`,
     щоб гнати async усередині ноутбука.
+  - `run_api.py` — HTTP API (див. секцію «API»).
+  - `python -m src.cli <command>` — argparse-CLI з авто-реєстрацією команд
+    (`src/cli/commands/`); поточна команда — `add_user`.
 
 ## Бібліотеки
 
-- `fastapi`, `uvicorn[standart]` — HTTP-шар (capability `add-rest-api`).
+- `fastapi`, `uvicorn[standard]` — HTTP-шар (capability `add-rest-api`).
 - `python-jose[cryptography]` — JWT HS256 (`src/api/auth.py`).
-- `passlib[bcrypt]` — bcrypt-хешування паролів `api_users.password_hash`.
+- `bcrypt` (прямий, `>=4.0`) — хешування паролів `api_users.password_hash`
+  у `src/api/auth.py`. `passlib` прибрано — несумісний із `bcrypt` 5.x на
+  Python 3.14 (`decisinLog.md` → D-011).
 - `pydantic[email] ^2.8`, `pydantic-settings ^2.4`.
 - `sqlalchemy[asyncio] ^2.0`, `asyncpg`, `psycopg2-binary` (для синхронного
   engine у `sync_sessin`).
@@ -69,21 +75,31 @@
 ## Команди
 
 ```sh
+# Встановити залежності (створює .venv із uv.lock)
+uv sync
+
 # Підняти БД
 docker compose up -d db
 
 # Міграція до останнього
-alembic upgrade head
+uv run alembic upgrade head
 
 # Згенерувати нову ревізію
-alembic revision --autogenerate -m "<slug>"
+uv run alembic revision --autogenerate -m "<slug>"
 
 # Запуск (CLI-сценарій)
-python main.py
+uv run main.py
 
 # Запуск HTTP API
-python run_api.py            # або: uvicorn src.api.app:app --reload
+uv run run_api.py            # або: uv run uvicorn src.api.app:app --reload
+
+# argparse-CLI (керування застосунком)
+uv run python -m src.cli add_user        # завести користувача api_users
 ```
+
+Шорткати в `Makefile` (тонкі обгортки поверх `uv run`): `make serve`
+(HTTP API), `make dev` (uvicorn --reload), `make add-user`,
+`make cli ARGS="..."`, `make sync`.
 
 ## Інтеграційні URL та автентифікація
 

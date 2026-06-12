@@ -149,3 +149,7 @@ test.ipynb
 sqla_test.ipynb
 .ipynb_checkpoints/
 
+
+# SDD plugin (per-developer, do not commit)
+.claude/*.local.md
+.worktrees/

@@ -12,18 +12,21 @@
 ## 1. Як підняти
 
 ```sh
+# 0. Залежності
+uv sync
+
 # 1. БД
 docker compose up -d db
-poetry run alembic upgrade head      # має дати head ef2c7288bbb0
+uv run alembic upgrade head          # має дати head ef2c7288bbb0
 
 # 2. JWT-секрет (одноразово в .env)
-python -c 'import secrets; print(secrets.token_hex(32))'
+uv run python -c 'import secrets; print(secrets.token_hex(32))'
 # скопіювати у APP__API__JWT_SECRET в .env
 
 # 3. Старт
-poetry run python run_api.py
+uv run run_api.py
 # або:
-poetry run uvicorn src.api.app:app --reload
+uv run uvicorn src.api.app:app --reload
 ```
 
 OpenAPI: `http://localhost:8000/docs`. Health-check без авторизації:
@@ -36,7 +39,7 @@ API **не створює юзерів автоматично** — ні чер�
 
 ```sh
 # 1) bcrypt-хеш пароля
-poetry run python -c "from passlib.hash import bcrypt; print(bcrypt.hash('your-strong-password'))"
+uv run python -c "from passlib.hash import bcrypt; print(bcrypt.hash('your-strong-password'))"
 
 # 2) INSERT через PyCharm DataGrip / psql
 ```

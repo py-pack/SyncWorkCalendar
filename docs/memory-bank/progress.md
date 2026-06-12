@@ -22,19 +22,27 @@
 
 ## Що в роботі (OpenSpec)
 
-- Активних змін немає. Остання — [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
+- **[`restructure-monorepo-frontend`](../../openspec/changes/restructure-monorepo-frontend/)**
+  — **реалізовано** (47/47 тасків; до коміту + архівації). Бекенд переїхав
+  `src/` → `api/app/` (пакет `src`→`app`, ~90 імпортів), каркас `front/`
+  (Vue 3 + Vite + TS, vue-router, Pinia, `fetch`-клієнт), мультисервісний
+  Docker на корені (dev-проксі Vite → `api`), дворівневі інструкції агентів.
+  Доменна логіка та схема БД не зачіпались (alembic head `ef2c7288bbb0`).
+  4 capability: `monorepo-layout`, `frontend-app`, `container-orchestration`,
+  `workspace-conventions`. Деталі — `decisinLog.md` → D-012.
+- Попередня — [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
   — заархівована **2026-06-12**: REST API підтверджено робочим, 5
   capability-специфікацій злиті в `openspec/specs/`. Тех-довідка —
   `docs/technical/api-reference.md`.
 
 ## Що працює (HTTP API)
 
-- FastAPI app (`src/api/app.py`) із CORS і глобальними exception handler-ами.
+- FastAPI app (`app/api/app.py`) із CORS і глобальними exception handler-ами.
   Старт — `run_api.py` / `make serve` (підтверджено робочим 2026-06-12).
 - JWT auth (`/auth/login`, `/auth/refresh`, `/auth/me`) поверх `api_users`;
-  паролі хешуються прямим `bcrypt` (`src/api/auth.py`, формат `$2b$`).
+  паролі хешуються прямим `bcrypt` (`app/api/auth.py`, формат `$2b$`).
 - `api_jobs` lifecycle (`running → needs_verification → verified`, або
-  `running → failed`) — wrapper `src/api/jobs_wrapper.run_job`.
+  `running → failed`) — wrapper `app/api/jobs_wrapper.run_job`.
 - Read-endpoints: `/tc-projects` (з `entries_count`), `/jr-projects` (з
   `issues_count`), `/worklog-sync-tasks` (із summary), `/tc-entries/untracked`.
 - PATCH `/tc-projects/{id}` з `extra=forbid` і регексом для `issue_key`.
@@ -47,8 +55,8 @@
 - Видалення раніше створених worklog-ів у `Tempo`.
 - Тести (юніт/інтеграційні) і CI.
 - Повноцінне управління користувачами через API/CLI — окрема майбутня
-  зміна `add-user-management-cli`. Базовий CLI вже є: `src/cli/` з командою
-  `add_user` (`python -m src.cli add_user`); решта (list/deactivate/змінити
+  зміна `add-user-management-cli`. Базовий CLI вже є: `app/cli/` з командою
+  `add_user` (`python -m app.cli add_user`); решта (list/deactivate/змінити
   пароль/worker_key) — попереду.
 - TTL/cron для старих `api_jobs` — `add-api-jobs-cleanup`.
 - RBAC, per-user OAuth-токени на Jira/TimeCamp — окремі майбутні зміни.
@@ -57,10 +65,10 @@
 
 - Branch: `main`.
 - Незакомічене: `M main.ipynb` (зміна періоду на 2026-04-08…2026-04-13)
-  плюс імпементація `add-rest-api` (нові файли `src/api/`, `src/models/api_*.py`,
-  `src/dao/api_*_dao.py`, `run_api.py`, alembic-ревізія `ef2c7288bbb0`),
-  а також сесія 2026-06-12: `src/cli/`, `Makefile`, `.python-version` (3.14),
-  перехід `passlib → bcrypt` у `pyproject.toml`/`src/api/auth.py`,
+  плюс імпементація `add-rest-api` (нові файли `app/api/`, `app/models/api_*.py`,
+  `app/dao/api_*_dao.py`, `run_api.py`, alembic-ревізія `ef2c7288bbb0`),
+  а також сесія 2026-06-12: `app/cli/`, `Makefile`, `.python-version` (3.14),
+  перехід `passlib → bcrypt` у `pyproject.toml`/`app/api/auth.py`,
   міграція `poetry → uv` (`uv.lock`).
 - Остання міграція: `ef2c7288bbb0` (2026-05-13, `add_api_layer_tables`).
 - Алембік head відповідає поточним моделям після застосування ревізії.

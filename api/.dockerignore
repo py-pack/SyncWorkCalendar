@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.ipynb
+.ipynb_checkpoints/
+.db/
+.pytest_cache/
+.mypy_cache/
+# локальний override з секретами — у образ не бакаємо (env дає compose);
+# .env.template (дефолти) лишаємо
+.env

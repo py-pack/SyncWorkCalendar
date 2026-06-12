@@ -17,16 +17,23 @@
 `memory-bank-manager`. Не дублюй у `AGENTS.md` той загальний контекст, який
 вже описаний у Memory Bank — додавай посилання.
 
-## Робочі правила
+## Розкладка монорепо (роутинг)
 
-- Перед правкою моделей чи DAO — звір зі стейт-машиною `WorklogSyncTask`
-  у `systemPatterns.md` та з рішеннями `D-005`, `D-006` у `decisinLog.md`.
-- Будь-яка зміна `src/models/*` має супроводжуватись alembic-ревізією:
-  `alembic revision --autogenerate -m "<slug>"`. Не редагуй старі ревізії.
-- Не запускай `BaseDAO.sync_all` для часткових даних worklog/entry — це full
-  replace. Користуйся `sync_all_between` або `update_by_keys`.
-- При додаванні нового `JRProject` ключа не покладайся на `SyncTaskService`
-  кеш — TTL 2 год (`D-003`).
+- **`api/`** — Python-бекенд (FastAPI/SQLAlchemy/Alembic/CLI, пакет `app`).
+  Робочі правила бекенду — у [`api/AGENTS.md`](api/AGENTS.md).
+- **`front/`** — веб-фронтенд (Vue 3 + Vite + TypeScript). Робочі правила
+  фронту — у [`front/AGENTS.md`](front/AGENTS.md).
+
+Спільне на корені: `docs/memory-bank/`, `docs/technical/`, `openspec/`,
+Docker (`docker-compose.yml`, per-folder `Dockerfile`), кореневий `Makefile`.
+
+## Скіли
+
+Загальні скіли — глобальні, спільні на корені. Per-folder орієнтири — це
+**легкі вказівники** в `api/AGENTS.md`/`CLAUDE.md` та
+`front/AGENTS.md`/`CLAUDE.md`; окремих `.claude/skills/` у підтеках не тримаємо.
+(Раніше діяло правило «жодних локальних скілів» — переглянуто, див.
+`decisinLog.md`.)
 
 ## OpenSpec
 
@@ -39,9 +46,8 @@
 - `/openspec-apply-change` — виконати таски.
 - `/openspec-archive-change` — закрити і перенести у `openspec/changes/archive/`.
 
-Скіли глобальні; локальних копій у `.claude/skills/` чи `.agents/skills/`
-не створюємо.
-
 ## Запуск
 
-Деталі команд (uv, Alembic, Docker) — у `techContext.md`.
+Деталі команд (uv, Alembic, Docker, Vite) — у `techContext.md`. Кореневий
+`Makefile` тримає шорткати для обох частин (`make serve`, `make front-dev`
+тощо).

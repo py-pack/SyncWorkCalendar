@@ -22,6 +22,29 @@ Memory Bank — не дублюй її в `CLAUDE.md`, `AGENTS.md` чи інши
 інструкцій. Сюди додавай лише операційні нюанси, специфічні для роботи Claude
 Code, які не належать Memory Bank.
 
+## Розкладка монорепо (роутинг)
+
+Репозиторій розділено на дві частини зі своїми інструкціями:
+
+- **`api/`** — Python-бекенд (FastAPI, SQLAlchemy, Alembic, CLI; пакет `app`).
+  Працюєш у бекенді — читай [`api/CLAUDE.md`](api/CLAUDE.md) і
+  [`api/AGENTS.md`](api/AGENTS.md).
+- **`front/`** — веб-фронтенд (Vue 3 + Vite + TypeScript). Працюєш у фронті —
+  читай [`front/CLAUDE.md`](front/CLAUDE.md) і
+  [`front/AGENTS.md`](front/AGENTS.md).
+
+На корені лишаються **спільні** для всього монорепо речі: `docs/memory-bank/`,
+`docs/technical/`, `openspec/`, Docker (`docker-compose.yml`, per-folder
+`Dockerfile`), кореневий `Makefile`.
+
+## Скіли
+
+Загальні (project-wide) скіли — глобальні, спільні на корені (`.claude/`).
+Per-folder орієнтири живуть як **легкі вказівники** у `api/CLAUDE.md`/`AGENTS.md`
+та `front/CLAUDE.md`/`AGENTS.md` (без окремих `.claude/skills/` усередині
+підтек). Це свідома зміна попередньої конвенції — деталі в
+`docs/memory-bank/decisinLog.md`.
+
 ## OpenSpec
 
 Проект під OpenSpec — структура в `openspec/` (`changes/` + `specs/`).

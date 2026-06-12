@@ -1,42 +1,50 @@
 # System Patterns
 
+## Розкладка монорепо
+
+Код розділено на `api/` (Python-бекенд, пакет `app` — фізично `api/app/`) та
+`front/` (Vue 3 + Vite + TS). Docker, `openspec/`, `docs/` і кореневий
+`Makefile` — спільні на корені. Деталі — `techContext.md`; рішення про
+переїзд `src`→`app` — `decisinLog.md` → D-012.
+
 ## Шари
 
 ```
-HTTP клієнт (curl, Swagger UI, майбутній frontend)
-   │
+front/ (Vue 3 + Vite + TS)   ← SPA: vue-router, Pinia, fetch-клієнт → /api (Vite-проксі)
+   │   (також curl, Swagger UI)
    ▼
-src/api/                     ← FastAPI: app, routers, schemas, deps, auth, jobs_wrapper
+api/app/api/                 ← FastAPI: app, routers, schemas, deps, auth, jobs_wrapper
    │       └─► run_job(...)  ← context manager → INSERT/UPDATE api_jobs (своя сесія)
    │
-main.py / main.ipynb         ← альтернативна (legacy) точка входу
-src/cli/*                    ← argparse-CLI з авто-реєстрацією команд
+api/app/{main.py,…}          ← альтернативна (legacy) точка входу (main.py / main.ipynb)
+app/cli/*                    ← argparse-CLI з авто-реєстрацією команд
    │                            (операційні дії; реюз dao/core/auth)
    ▼
-src/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog tasks)
+app/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog tasks)
    │
-   ├─► src/services/*        ← HTTP-клієнти зовнішніх API + DTO (Pydantic)
+   ├─► app/services/*        ← HTTP-клієнти зовнішніх API + DTO (Pydantic)
    │
-   └─► src/dao/*             ← робота з БД через SQLAlchemy AsyncSession
+   └─► app/dao/*             ← робота з БД через SQLAlchemy AsyncSession
             │
             ▼
-       src/models/*          ← SQLAlchemy 2.x Declarative моделі
+       app/models/*          ← SQLAlchemy 2.x Declarative моделі
 ```
 
-- `src/api/app.py` — `create_app()` factory; `lifespan` валідує
+- `app/api/app.py` — `create_app()` factory; `lifespan` валідує
   `APP__API__JWT_SECRET`; включає CORS-middleware і глобальні exception
   handler-и для `SQLAlchemyError` (500) і `requests.RequestException` (502).
-- `src/api/jobs_wrapper.run_job(...)` — async-контекстний менеджер навколо
+- `app/api/jobs_wrapper.run_job(...)` — async-контекстний менеджер навколо
   sync-endpoint-а: `INSERT api_jobs.running` → yield `ctx` → `UPDATE
   needs_verification + ctx.result` на normal-exit / `UPDATE failed + error`
   на exception. Wrapper тримає **окрему сесію**, щоб audit-row лишався
   навіть коли request-сесія відкочується.
 
-- `src/core/db_helper.py` тримає глобальний `async_engine`, `sync_engine`
+- `app/core/db_helper.py` тримає глобальний `async_engine`, `sync_engine`
   і контекст-менеджер `get_async_asession()` (автокоміт на виході, rollback при
   винятку). Клас `DatabaseHelper` лишився як `deprecated`.
-- `src/config.py` — `pydantic-settings`, префікс `APP__`, вкладеність через
-  `__`. Підвантаження з `.env.template` і `.env`.
+- `app/config.py` — `pydantic-settings`, префікс `APP__`, вкладеність через
+  `__`. Підвантаження за абсолютними шляхами, пріоритет (від нижчого):
+  `api/.env.template` → `<root>/.env` → `api/.env` (реальні env — над усіма).
 
 ## DAO-патерн
 
@@ -79,7 +87,7 @@ src/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog t
 
 ## SyncTaskService (кеш ключів проектів)
 
-`src/core/utils/sync_task_service.py` тримає **класовий кеш** ключів `JRProject`
+`app/core/utils/sync_task_service.py` тримає **класовий кеш** ключів `JRProject`
 і шаблонів `KeyTemplate` із TTL 2 години. `match_task(description)` спершу
 шукає шаблон `[A-Z]{2,8}-\d{1,4}` і звіряє префікс зі списком ключів, потім
 прокручує regex-шаблони з `KeyTemplate`.

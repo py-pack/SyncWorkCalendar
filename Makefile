@@ -1,21 +1,38 @@
-.PHONY: serve dev cli add-user sync
+.PHONY: serve dev cli add-user sync front-dev front-build
 
-# Запустити web-сервер (FastAPI) на host/port з .env
+# Host-порти за конвенцією (10xxx — сервіси, 11xxx — БД), щоб проекти не
+# конфліктували між собою. Перевизначити: `make dev API_PORT=10201`.
+API_PORT   ?= 10331
+FRONT_PORT ?= 10332
+
+# --- Backend (запускається всередині api/) ---
+
+# Запустити web-сервер (FastAPI) на конвенційному host-порту
 serve:
-	uv run python run_api.py
+	cd api && uv run uvicorn app.api.app:app --host 0.0.0.0 --port $(API_PORT)
 
 # Те саме, але з hot-reload для розробки
 dev:
-	uv run uvicorn src.api.app:app --reload
+	cd api && uv run uvicorn app.api.app:app --host 0.0.0.0 --port $(API_PORT) --reload
 
 # CLI: проброс будь-яких аргументів, напр. `make cli ARGS="add_user --username john"`
 cli:
-	uv run python -m src.cli $(ARGS)
+	cd api && uv run python -m app.cli $(ARGS)
 
 # Швидкий шорткат для додавання користувача
 add-user:
-	uv run python -m src.cli add_user
+	cd api && uv run python -m app.cli add_user
 
-# Синхронізувати залежності
+# Синхронізувати залежності бекенду
 sync:
-	uv sync
+	cd api && uv sync
+
+# --- Frontend (запускається всередині front/) ---
+
+# Vite dev-server на конвенційному host-порту
+front-dev:
+	cd front && npm run dev -- --port $(FRONT_PORT)
+
+# Продакшн-збірка фронту
+front-build:
+	cd front && npm run build

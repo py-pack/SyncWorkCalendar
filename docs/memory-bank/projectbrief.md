@@ -45,7 +45,7 @@
 1. **REST API над існуючими тасками (поточний етап).** Single-user JWT,
    read-endpoints стану синхронізації, ручні sync-trigger-и, журнал
    `api_jobs` із проміжним кроком `needs_verification`. Активна зміна —
-   [`add-rest-api`](../../openspec/changes/add-rest-api/). Поточний
+   [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/). Поточний
    скоуп — в `activeContext.md`.
 2. **Сервіс автоматичної періодичної синхронізації.** Той самий рушій
    синку, але запускається з розкладу без ручного `POST /sync/**`.

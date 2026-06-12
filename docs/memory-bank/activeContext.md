@@ -2,11 +2,52 @@
 
 ## Дата оновлення
 
-2026-06-12 — після архівації `add-rest-api`.
+2026-06-12 — реалізовано `restructure-monorepo-frontend` (до архівації).
 
 ## Поточний фокус
 
-**Активних OpenSpec-змін немає.** Зміна
+**Зміна
+[`restructure-monorepo-frontend`](../../openspec/changes/restructure-monorepo-frontend/)
+реалізована** (усі 47 тасків виконані; лишилось закомітити + заархівувати).
+Що зроблено:
+
+- **Бекенд переїхав `src/` → `api/app/`** (пакет перейменовано `src`→`app`,
+  ~90 імпортів переписано). Smoke зелений: `from app.api.app import app`
+  (24 роути), `python -m app.cli --help`, `alembic heads`/`current` =
+  `ef2c7288bbb0`, `make dev` стартує і віддає `/healthz`. Усі бекенд-команди
+  тепер із теки `api/` (кореневий `Makefile` робить `cd api && …`).
+- **Env-фікс:** `app/config.py` резолвить env-файли **абсолютними** шляхами
+  (cwd бекенду — `api/`), пріоритет за зростанням:
+  `api/.env.template` (дефолти, перенесено сюди з кореня) → `<root>/.env`
+  (спільний, його ж читає docker-compose) → `api/.env` (опційний локальний
+  override, gitignore, не бакається в образ). Реальні env — над усіма;
+  `env_ignore_empty=True`. Без цього `make dev` падав на
+  `APP__API__JWT_SECRET is required`. Деталь — `design.md` D2.
+- **Каркас `front/`** на Vue 3 + Vite + TypeScript: `vue-router`, **Pinia**,
+  типізований **`fetch`**-клієнт (`VITE_API_BASE_URL`). `npm run build`
+  (`vue-tsc --noEmit` + `vite build`) і dev-server `:5173` — перевірені.
+- **Docker на корені, мультисервіс + dev hot-reload:** `api` (`./api`,
+  `uvicorn --reload`, код-маунт, polling) + `front` (`./front`, Vite,
+  polling) + `db`, спільна мережа `appnet`. Доступ через **host-nginx** на
+  `http://sync.loc`/`https://sync.dev` (`docker/nginx.loc.conf`): `/` → Vite,
+  `/api/` → бек. HMR за двома доменами — канонічний `wss://sync.dev`
+  (env `VITE_HMR_*`, потрібен mkcert-cert). Гайд —
+  `docs/technical/dev-environment.md`. Конфіги валідні (`vite build`,
+  `docker compose config`); образи зібрані. End-to-end `up`+nginx — за
+  користувачем (cert/домени + зупинка host-процесів).
+- **Дворівневі інструкції:** кореневі `AGENTS.md`/`CLAUDE.md` — роутери;
+  `api/` і `front/` мають власні з легкими вказівниками на скіли. Memory Bank
+  оновлено (`techContext`, `systemPatterns`, `decisinLog` → D-012).
+
+Доменна логіка, моделі та схема БД не змінювалися.
+
+**Не перевірено в цій сесії (середовищне обмеження, не регресія):**
+end-to-end `docker compose up` усього стека — щоб не чіпати вже підняті
+9-денні контейнери (`tplfastapi_db_pgsql` на `11331`, той самий
+`container_name`) і живу БД. Образи `api`/`front` зібрані, `compose config`
+валідний; alembic уже конектиться до живої БД (head `ef2c7288bbb0`).
+
+Попередня зміна
 [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
 заархівована 2026-06-12: REST API на FastAPI підтверджено робочим
 (сервер стартує через `run_api.py`/`make serve`, ручний smoke-test
@@ -16,13 +57,13 @@
 
 Під час доведення API до робочого стану (сесія 2026-06-12) додатково:
 
-- **CLI-модуль `src/cli/`** з авто-реєстрацією команд (за зразком
+- **CLI-модуль `app/cli/`** з авто-реєстрацією команд (за зразком
   `dom-ex.bot`); перша команда — `add_user` (заводить `api_users` із
   bcrypt-хешем через `APIUserDAO.create_user`). Запуск:
-  `python -m src.cli add_user` або `make add-user`. Це знімає попередню
+  `python -m app.cli add_user` або `make add-user`. Це знімає попередню
   залежність від ручного `INSERT` першого користувача.
 - **Хешування паролів переведено з `passlib` на прямий `bcrypt`**
-  (`src/api/auth.py`) — `passlib` 1.7.4 несумісний із `bcrypt` 5.x на
+  (`app/api/auth.py`) — `passlib` 1.7.4 несумісний із `bcrypt` 5.x на
   Python 3.14 (`decisinLog.md` → D-011). Формат хешу `$2b$` збережено,
   логін сумісний.
 - **Python запінено на 3.14** через `.python-version` (узгоджено з

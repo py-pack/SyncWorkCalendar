@@ -153,3 +153,7 @@ sqla_test.ipynb
 # SDD plugin (per-developer, do not commit)
 .claude/*.local.md
 .worktrees/
+
+# Node / frontend (front/)
+node_modules/
+npm-debug.log*

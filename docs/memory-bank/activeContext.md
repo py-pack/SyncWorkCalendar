@@ -8,6 +8,54 @@
 2 нові capability злиті в `openspec/specs/` і канонічні: `api-calendar`,
 `frontend-calendar`. Лишився лише git-commit.
 
+## Заархівована зміна: `extract-projects-screen` (2026-06-13)
+
+**Створено, реалізовано і заархівовано 2026-06-13 (17/20 задач; секції 5.2–5.4
+— браузерний QA — лишилися на живу перевірку). 3 capability-дельти злиті в
+`openspec/specs/` і канонічні: MODIFIED `web-app-shell` (секція «Дані» з пунктом
+«Проекти» + вкладена маршрутизація `projects/*`), MODIFIED `frontend-data-tables`
+(ADDED «Екран «Проекти»», спрощені «Екран TimeCamp»/«Екран Jira» без вкладок),
+MODIFIED `frontend-app` (вкладені `projects/*` + редірект). Тека —
+[`archive/2026-06-13-extract-projects-screen/`](../../openspec/changes/archive/2026-06-13-extract-projects-screen/).**
+Фронтенд-онлі рефактор
+навігації/роутингу: винесено дві «Проекти»-таблиці (TimeCamp + Jira) з екранів
+`/timecamp` і `/jira` у новий екран **«Проекти»** з вкладеними маршрутами
+`/projects/timecamp` і `/projects/jira` (`/projects` → редірект на дефолт).
+Після виносу `/timecamp` показує лише незіставлені записи, `/jira` — лише
+задачі (обидва без `Tabs`). Навігація: **єдиний пункт «Проекти»** першим у
+секції «Дані» (→ `/projects`; під-вʼюхи TimeCamp/Jira — таби всередині екрана,
+не окремі пункти; рішення користувача 2026-06-13); пункти «Даних» перейменовані
+під вміст («TimeCamp · Записи», «Jira · Задачі»). Бекенд/DAO/схема БД **не зачіпались**
+(переюз наявних `GET/PATCH /tc-projects`, `/jr-projects`,
+`GET /tc-entries/untracked`, `GET /jr-issues`, `POST /sync/...`).
+`validate --specs --strict` — 20/20 OK.
+
+**Реалізація (frontend, `front/`):**
+- `lib/nav.ts` — `NavItem` отримав опційні `path`/`children`; у секцію «Дані»
+  додано єдиний пункт `projects` (першим) із children `projects-timecamp`/
+  `projects-jira`; `children` живлять **лише роутер**; хелпер `leafItems()`
+  (тільки для `SCREENS` → валідні екрани-«листки» для `validScreen`).
+- `router/index.ts` — узагальнений `routeFor()` будує вкладений `/projects`
+  (контейнер + `redirect` на першу під-вʼюху + дочірні з абсолютними шляхами);
+  решта екранів — плоскі, як раніше.
+- Нові `views/ProjectsView.vue` (контейнер: `PageHeader` + `Tabs`, привʼязані
+  до маршруту, + `<router-view>`), `views/projects/TcProjects.vue`,
+  `views/projects/JrProjects.vue` (таблиці перенесені без зміни поведінки).
+- `views/TimeCampView.vue` і `views/JiraView.vue` — прибрано `Tabs` і таблицю
+  проектів; лишились untracked-записи / задачі відповідно.
+- `components/AppShell.vue` — рендерить `grp.items` (пункт «Проекти» — **один
+  лінк** на `/projects`); активність — за `route.matched` (батьківський
+  `/projects` присутній у matched на будь-якому `/projects/*`).
+- `stores/tables.ts` — авто-синк роздроблено по екранах (D4): `autoSyncProjects`
+  (tc+jr проекти), `autoSyncEntries` (tc-записи), `autoSyncIssues` (re-sync
+  відомих ключів задач); фокусні лоадери `loadProjects`/`loadUntracked`/
+  `loadIssues` замінили складені `loadTimeCamp`/`loadJira`. Кожне джерело
+  синкається рівно з одного екрана; 5-хв вікно свіжості збережено.
+- `i18n/strings.ts` (UK+EN) — нові ключі `nav_section_projects`,
+  `nav_projects_timecamp`/`_jira`, `pr_title`/`pr_desc`; перейменовані
+  `nav_timecamp`/`nav_jira`; уточнені `tc_*`/`jr_*` заголовки.
+- `npm run build` (`vue-tsc --noEmit` + `vite build`) — чисто.
+
 ## Статус фази 3 (`add-data-screens`) — заархівовано 2026-06-13
 
 Реалізовано (29/35 задач; секція 9 «ручний QA» — частково пройдено живцем, решта

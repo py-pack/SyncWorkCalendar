@@ -40,28 +40,37 @@ export const useTablesStore = defineStore('tables', () => {
 
   const error = ref<string | null>(null)
 
-  // ---- loaders ----
+  // ---- loaders (по екранах) ----
 
-  async function loadTimeCamp(): Promise<void> {
+  /** Екран «Проекти»: обидва джерела проектів (TimeCamp + Jira). */
+  async function loadProjects(): Promise<void> {
     error.value = null
     try {
-      const [projects, untracked] = await Promise.all([
-        api.tcProjects(period),
-        api.tcUntracked(period),
-      ])
-      tcProjects.value = projects
-      tcUntracked.value = untracked
+      const [tc, jr] = await Promise.all([api.tcProjects(period), api.jrProjects()])
+      tcProjects.value = tc
+      jrProjects.value = jr
     } catch (e) {
       error.value = errMsg(e)
     }
   }
 
-  async function loadJira(): Promise<void> {
+  /** Екран TimeCamp: лише незіставлені записи. */
+  async function loadUntracked(): Promise<void> {
     error.value = null
     try {
-      const [projects, issues] = await Promise.all([api.jrProjects(), api.jrIssues()])
-      jrProjects.value = projects
+      tcUntracked.value = await api.tcUntracked(period)
+    } catch (e) {
+      error.value = errMsg(e)
+    }
+  }
+
+  /** Екран Jira: задачі + проекти Jira (потрібні для кольорового тегу задачі). */
+  async function loadIssues(): Promise<void> {
+    error.value = null
+    try {
+      const [issues, projects] = await Promise.all([api.jrIssues(), api.jrProjects()])
       jrIssues.value = issues
+      jrProjects.value = projects
     } catch (e) {
       error.value = errMsg(e)
     }
@@ -94,38 +103,56 @@ export const useTablesStore = defineStore('tables', () => {
   // Екран спершу показує дані з БД (load*), потім у фоні тягне свіже з
   // TimeCamp/Jira і перезавантажує. Захист від флуду: не пере-синкати, якщо
   // синкали менш ніж SYNC_TTL_MS тому (швидка навігація туди-сюди).
+  //
+  // Кожне джерело синкається рівно з ОДНОГО екрана (D4): проекти — з «Проектів»,
+  // записи — з TimeCamp, задачі — з Jira.
 
   // 5 хв: кожен синк створює api_jobs (needs_verification), тож не пере-синкаємо
   // частіше — дані щонайбільше 5-хв давнини, без потоку job-ів на кожну навігацію.
   const SYNC_TTL_MS = 5 * 60_000
-  const lastSync = { timecamp: 0, jira: 0 }
+  const lastSync = { projects: 0, entries: 0, issues: 0 }
 
-  async function autoSyncTimeCamp(): Promise<void> {
+  /** Екран «Проекти»: освіжити проекти TimeCamp + Jira. */
+  async function autoSyncProjects(): Promise<void> {
     const now = Date.now()
-    if (now - lastSync.timecamp < SYNC_TTL_MS) return
-    lastSync.timecamp = now
+    if (now - lastSync.projects < SYNC_TTL_MS) return
+    lastSync.projects = now
     try {
       await api.syncTcProjects()
-      await api.syncTcEntries(sync)
-      await loadTimeCamp()
+      await api.syncJrProjects()
+      await loadProjects()
     } catch (e) {
       error.value = errMsg(e)
-      lastSync.timecamp = 0 // дозволити повтор після помилки
+      lastSync.projects = 0 // дозволити повтор після помилки
     }
   }
 
-  async function autoSyncJira(): Promise<void> {
+  /** Екран TimeCamp: освіжити записи за період. */
+  async function autoSyncEntries(): Promise<void> {
     const now = Date.now()
-    if (now - lastSync.jira < SYNC_TTL_MS) return
-    lastSync.jira = now
+    if (now - lastSync.entries < SYNC_TTL_MS) return
+    lastSync.entries = now
     try {
-      // Лише проекти (легко). Задачі API синкає point-by-key (D3) — ре-синк
-      // усіх відомих на кожне відкриття б'є по Jira; задачі показуємо з БД.
-      await api.syncJrProjects()
-      await loadJira()
+      await api.syncTcEntries(sync)
+      await loadUntracked()
     } catch (e) {
       error.value = errMsg(e)
-      lastSync.jira = 0
+      lastSync.entries = 0
+    }
+  }
+
+  /** Екран Jira: re-sync відомих ключів задач (API лише point-by-key, D3). */
+  async function autoSyncIssues(): Promise<void> {
+    const now = Date.now()
+    if (now - lastSync.issues < SYNC_TTL_MS) return
+    lastSync.issues = now
+    try {
+      const keys = jrIssues.value.map((i) => i.key)
+      if (keys.length) await api.syncJrIssues(keys)
+      await loadIssues()
+    } catch (e) {
+      error.value = errMsg(e)
+      lastSync.issues = 0
     }
   }
 
@@ -154,13 +181,15 @@ export const useTablesStore = defineStore('tables', () => {
     wst,
     wstSummary,
     error,
-    loadTimeCamp,
-    loadJira,
+    loadProjects,
+    loadUntracked,
+    loadIssues,
     loadTempo,
     toggleTcSync,
     toggleJrWatched,
-    autoSyncTimeCamp,
-    autoSyncJira,
+    autoSyncProjects,
+    autoSyncEntries,
+    autoSyncIssues,
     syncWstPrepare,
     syncWstResolve,
     syncWstPush,

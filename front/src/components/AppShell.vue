@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 import BrandMark from '@/components/BrandMark.vue'
 import TweaksPanel from '@/components/TweaksPanel.vue'
@@ -17,6 +17,16 @@ import { useUiStore } from '@/stores/ui'
 const { t, lang, setLang } = useI18n()
 const ui = useUiStore()
 const journal = useJournalStore()
+const route = useRoute()
+
+const pathOf = (item: NavItem): string => item.path ?? `/${item.name}`
+
+// Активність — за matched-записами маршруту: батьківський `/projects` присутній
+// у matched на будь-якому `/projects/*`, тож єдиний пункт «Проекти» лишається
+// підсвіченим і на вкладеній під-вʼюсі (TimeCamp/Jira).
+function isActive(item: NavItem): boolean {
+  return route.matched.some((r) => r.path === pathOf(item))
+}
 
 // Бейдж журналу — живий лічильник needs_verification; решта — зі статичного нав-конфігу.
 function badgeFor(item: NavItem): number | undefined {
@@ -54,9 +64,9 @@ const shellClasses = computed(() => [
           <RouterLink
             v-for="item in grp.items"
             :key="item.name"
-            :to="{ name: item.name }"
+            :to="{ path: pathOf(item) }"
             class="nav__item"
-            active-class="is-active"
+            :class="{ 'is-active': isActive(item) }"
             :title="ui.navCollapsed ? t[item.titleKey] : undefined"
           >
             <Icon :name="item.icon" :size="18" />

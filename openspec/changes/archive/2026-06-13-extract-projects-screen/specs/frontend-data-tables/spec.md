@@ -1,27 +1,4 @@
-# frontend-data-tables Specification
-
-## Purpose
-TBD - created by archiving change add-data-screens. Update Purpose after archive.
-## Requirements
-
-### Requirement: Спільний табличний каркас
-
-Фронтенд SHALL надавати переносні компоненти для «дані»-екранів: `PageHeader`
-(заголовок + опис + дії), `Tabs` (вкладки з лічильником), `DataTable`
-(колонки з кастомним рендером, вирівнюванням, опційним вибором рядків
-checkbox-ами, порожнім станом), `StatusBadge` (бейдж статусу worklog-таска/
-job) і кнопку синку, що показує стани `idle → running → done`.
-
-#### Scenario: Таблиця з вибором рядків
-
-- **WHEN** `DataTable` рендериться з `selectable`
-- **THEN** у шапці є чекбокс «вибрати всі» (із проміжним станом), у рядках —
-  власні чекбокси; вибір відображається
-
-#### Scenario: Порожня таблиця
-
-- **WHEN** `DataTable` отримує порожній список рядків
-- **THEN** показується підпис порожнього стану замість рядків
+## ADDED Requirements
 
 ### Requirement: Екран «Проекти»
 
@@ -65,6 +42,8 @@ MUST показати дані з БД одразу і **у фоні автом�
 - **THEN** дані з БД показуються одразу, а у фоні виконуються
   `POST /sync/timecamp/projects` і `POST /sync/jira/projects` з подальшим
   перезавантаженням
+
+## MODIFIED Requirements
 
 ### Requirement: Екран TimeCamp
 
@@ -113,32 +92,3 @@ MUST показати дані з БД одразу і **у фоні автом�
 - **WHEN** користувач відкриває екран Jira (поза вікном свіжості)
 - **THEN** дані з БД показуються одразу, а у фоні re-sync відомих ключів задач
   із подальшим перезавантаженням
-
-### Requirement: Екран Tempo / Worklog Sync Tasks
-
-Екран Tempo SHALL показувати `worklog_sync_tasks` (`GET /worklog-sync-tasks`)
-зі зведенням по реальних статусах конвеєра (`pre_create`/`create`/`created`),
-вибором рядків і **масовим синком вибраних**. Кроки конвеєра
-(`prepare → resolve-issues → push-to-tempo`) MUST бути доступні як кнопки
-(наявні `POST /sync/worklog-tasks/*`). Кожен рядок показує задачу, опис,
-працівника, дату, тривалість, статус (бейдж) і `Tempo ID`.
-
-#### Scenario: Зведення по статусах
-
-- **WHEN** відкривається екран Tempo
-- **THEN** показується кількість тасків у кожному статусі
-  (`pre_create`/`create`/`created`)
-
-#### Scenario: Масовий синк вибраних
-
-- **WHEN** користувач вибирає кілька несинхронізованих тасків і натискає
-  «Синхронізувати вибрані»
-- **THEN** запускається синк (через наявні sync-тригери), статуси
-  оновлюються до `created`
-
-#### Scenario: Кнопки конвеєра
-
-- **WHEN** користувач натискає крок конвеєра (`prepare`/`resolve-issues`/
-  `push-to-tempo`)
-- **THEN** викликається відповідний `POST /sync/worklog-tasks/*` зі станом
-  виконання

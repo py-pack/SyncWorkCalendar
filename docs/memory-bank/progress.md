@@ -22,6 +22,25 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`extract-projects-screen`](../../openspec/changes/archive/2026-06-13-extract-projects-screen/)
+  — **заархівовано 2026-06-13 (17/20; секції 5.2–5.4 — браузерний QA — на живу
+  перевірку). 3 capability-дельти злиті в `openspec/specs/` і канонічні:
+  MODIFIED `web-app-shell`, `frontend-data-tables` (+ADDED «Екран «Проекти»»),
+  `frontend-app`.** Фронтенд-онлі: винесено «Проекти»-таблиці (TimeCamp+Jira) з
+  `/timecamp`/`/jira` у новий екран «Проекти» з вкладеними маршрутами
+  `/projects/timecamp`·`/projects/jira` (`/projects` → редірект); `/timecamp` →
+  лише незіставлені записи, `/jira` → лише задачі (обидва без `Tabs`). У навігації
+  — **єдиний пункт «Проекти»** першим у секції «Дані» (під-вʼюхи TimeCamp/Jira —
+  таби всередині екрана); пункти «Даних» → «TimeCamp · Записи»/«Jira · Задачі».
+  Реалізація: `lib/nav.ts` (`NavItem.path/children`, `leafItems`),
+  `router/index.ts` (вкладений `/projects` + redirect), `views/ProjectsView.vue`
+  + `views/projects/{TcProjects,JrProjects}.vue`, спрощені `TimeCampView`/
+  `JiraView`, `AppShell` (один лінк + active за `route.matched`),
+  `stores/tables.ts` (авто-синк по
+  екранах: `autoSyncProjects`/`autoSyncEntries`/`autoSyncIssues`), `i18n`.
+  Бекенд не зачіпається. `npm run build` чисто; `validate --strict` — OK.
+  Дельти capability: `frontend-data-tables`, `web-app-shell`, `frontend-app`.
+  Деталі — `activeContext.md`. Лишилось: браузерний QA + git-commit.
 - **Веб-UI за дизайном Sync Work — 3 зміни (2026-06-13; усі
   `validate --strict` валідні):**
   - [`add-web-ui-foundation`](../../openspec/changes/archive/2026-06-13-add-web-ui-foundation/)

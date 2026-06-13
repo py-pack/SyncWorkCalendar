@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
@@ -38,6 +38,55 @@ class TCEntriesDAO(BaseDAO):
             ))).scalars().all()
 
         await cls._sync(db, entries, entries_db)
+
+    @classmethod
+    async def get_calendar_blocks(
+        cls,
+        db: AsyncSession,
+        worker_key: str | None,
+        date_from: date,
+        date_to: date,
+    ) -> list[dict]:
+        """Блоки тижня для read-екрана календаря.
+
+        `tc_entry` (відпрацьований час) ⋈ `tc_project` (колір/назва/issue_key)
+        ⋈ `worklog_sync_task` (стан синку). WST приєднується **лише** для
+        поточного `worker_key`, тож стан чужого worklog-а не протікає; entries
+        без WST лишаються (стан `service`). Період — за `tc_entry.start_at`.
+
+        Лише читання — без мутацій і без нових колонок (D3 у `design.md`).
+        """
+        stmt = (
+            select(
+                TCEntry.id,
+                TCEntry.start_at,
+                TCEntry.end_at,
+                TCEntry.description,
+                TCEntry.meta,
+                TCProject.name.label("project_name"),
+                TCProject.color.label("project_color"),
+                TCProject.issue_key.label("project_key"),
+                WorklogSyncTask.status.label("wst_status"),
+                WorklogSyncTask.issue_key.label("wst_issue_key"),
+            )
+            .select_from(TCEntry)
+            .outerjoin(TCProject, TCProject.id == TCEntry.tc_project_id)
+            .outerjoin(
+                WorklogSyncTask,
+                and_(
+                    WorklogSyncTask.source_id == TCEntry.id,
+                    WorklogSyncTask.worker_key == worker_key,
+                ),
+            )
+            .where(
+                and_(
+                    TCEntry.start_at >= datetime.combine(date_from, time.min),
+                    TCEntry.start_at <= datetime.combine(date_to, time.max),
+                )
+            )
+            .order_by(TCEntry.start_at)
+        )
+        return list((await db.execute(stmt)).mappings().all())
 
     async def get_entries_for_worklogs(
         self, db: AsyncSession,

@@ -3,6 +3,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 import { SCREENS, validScreen } from '@/lib/nav'
 import { storage } from '@/lib/storage'
+import CalendarView from '@/views/CalendarView.vue'
 import JiraView from '@/views/JiraView.vue'
 import JournalView from '@/views/JournalView.vue'
 import StubView from '@/views/StubView.vue'
@@ -10,9 +11,10 @@ import TempoView from '@/views/TempoView.vue'
 import TimeCampView from '@/views/TimeCampView.vue'
 import UsersView from '@/views/UsersView.vue'
 
-// Дані-екрани фази 3 — реальні; `calendar` лишається заглушкою до фази 2
-// (add-calendar-timesheet). Auth-gate — на рівні App.vue.
+// `calendar` (фаза 2) і дані-екрани фази 3 — реальні. StubView лишається
+// фолбеком для ще нереалізованих екранів. Auth-gate — на рівні App.vue.
 const SCREEN_COMPONENTS: Record<string, Component> = {
+  calendar: CalendarView,
   timecamp: TimeCampView,
   jira: JiraView,
   tempo: TempoView,

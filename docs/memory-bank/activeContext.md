@@ -2,8 +2,11 @@
 
 ## Дата оновлення
 
-2026-06-13 — **фази 1 і 3 заархівовані**; код обох у робочому дереві, не
-закомічено. Фаза 2 (`add-calendar-timesheet`) — на proposal-стадії.
+2026-06-13 — **фази 1, 2 і 3 заархівовані**; код усіх у робочому дереві, не
+закомічено. Фаза 2 (`add-calendar-timesheet`, read-only візуалізація, D-016)
+— **реалізована, браузерний QA пройдено наживо, заархівована 2026-06-13**;
+2 нові capability злиті в `openspec/specs/` і канонічні: `api-calendar`,
+`frontend-calendar`. Лишився лише git-commit.
 
 ## Статус фази 3 (`add-data-screens`) — заархівовано 2026-06-13
 
@@ -80,13 +83,24 @@
    (навігація, маршрути, auth-gate, user-chip), екран входу і **Google-вхід**
    (popup + One Tap, серверна верифікація, match-by-email до `api_users`,
    без авто-реєстрації; нова колонка `api_users.email`).
-2. [`add-calendar-timesheet`](../../openspec/changes/add-calendar-timesheet/) —
-   тижневий timesheet (головний екран) із **повним редагуванням блоків і
-   записом на бекенд**: drag/resize/split/duplicate/delete + sync; новий
-   `GET /calendar` і CRUD `/calendar/blocks`; редаговний блок =
-   `worklog_sync_tasks` (+ `billable`), TimeCamp read-only; редагування
-   synced-блоку активує зарезервовані `pre_update→update→updated` і
-   update/delete worklog у Tempo.
+2. [`add-calendar-timesheet`](../../openspec/changes/archive/2026-06-13-add-calendar-timesheet/) —
+   тижневий timesheet (головний екран), **заархівовано 2026-06-13** (read-only
+   візуалізація, D-016; QA пройдено наживо; 2 capability `api-calendar`/
+   `frontend-calendar` злиті в `openspec/specs/`): `GET /calendar` (read поверх наявних
+   `tc_entries`/`worklog_sync_tasks`/`tc_projects`, **без міграції й нових
+   колонок**, alembic head лишився `10b7dc50b00f`) + фронт-екран (сітка, блоки
+   3 варіанти, стани синку `service`/`tempo`/`synced` + error-стиль `failed`
+   forward-compat, тулбар, фільтри, навігація тижнями, тоталі, панель деталей у
+   режимі перегляду). **Backend:** `app/api/routers/calendar.py`,
+   `app/api/schemas/calendar.py`, `TCEntriesDAO.get_calendar_blocks` (LEFT JOIN
+   WST за `worker_key`); деривація стану — у роутері (`failed` не віддається,
+   D2). **Frontend:** `views/CalendarView.vue`, `components/calendar/*`,
+   `stores/calendar.ts` (read-only), `lib/calendar.ts` (геометрія/lane-розкладка),
+   `styles/calendar.css`, метод `api.calendar` + типи; роут `calendar` →
+   `CalendarView`. `npm run build` (`vue-tsc`+`vite`) — чисто; 401-контракт
+   `/calendar` перевірено. Редагування/створення/sync і round-trip у Tempo
+   **відкладено** окремими майбутніми змінами (`add-calendar-editing`,
+   `add-worklog-update-flow`). Лишилось: браузерний QA (секція 7) + git-commit.
 3. [`add-data-screens`](../../openspec/changes/archive/2026-06-13-add-data-screens/) —
    **заархівовано 2026-06-13** (див. статус вище). Таблиці TimeCamp/Jira/Tempo,
    журнал `api_jobs` (з verify), користувачі + **Users CRUD** (`/users`, invite
@@ -94,10 +108,16 @@
    `password_hash`) і мінімальний Jira-read (`GET /jr-issues`,
    `PATCH /jr-projects/{id}`).
 
+**Стратегія фронту (2026-06-13, D-016):** спочатку **візуалізувати** все, що
+вже є в БД (read-only екрани), потім проходитись по кожній сторінці окремо «по
+цеглинці» — додавати редагування/запис на бекенд окремими змінами. Календар —
+перший приклад цього підходу.
+
 **Свідомо відкладено** (UI показує, дія вимкнена; окремі майбутні зміни):
-RBAC-ролі (admin/member/viewer), untracked→issue matching. Усі 3 зміни
-валідні (`openspec validate --strict`). Деталі рішень — у `design.md`
-кожної зміни.
+RBAC-ролі (admin/member/viewer), untracked→issue matching; **редагування
+календаря** (`add-calendar-editing`) і **update/delete worklog-ів у Tempo**
+(`add-worklog-update-flow`). Активні зміни валідні
+(`openspec validate --strict`). Деталі рішень — у `design.md` кожної зміни.
 
 Попередня зміна
 [`restructure-monorepo-frontend`](../../openspec/changes/archive/2026-06-12-restructure-monorepo-frontend/)
@@ -176,8 +196,9 @@ capability-специфікації злиті в `openspec/specs/` (`monorepo-l
 ## Активні відкриті питання
 
 - **Сценарій оновлення worklog-ів.** Статуси `pre_update/update/updated` в
-  `StatusTaskEnum` зарезервовані, але не використовуються. Потрібно вирішити,
-  коли і за яким триггером оновлювати раніше синхронізовані записи.
+  `StatusTaskEnum` зарезервовані, але не використовуються. Активацію винесено в
+  майбутню зміну **`add-worklog-update-flow`** (round-trip update/delete у Tempo
+  для вже-`synced` блоків календаря) — див. `decisinLog.md` → D-016.
 - **Назва `worllog_sync_task.py`.** Файл і клас містять одрук (`worllog` замість
   `worklog`). Перейменування зачепить імпорти — поки не виправлено
   (`decisinLog.md` → D-008).

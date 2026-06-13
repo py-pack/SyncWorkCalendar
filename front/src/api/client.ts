@@ -17,6 +17,7 @@ import {
   type ApiJobDetail,
   type ApiJobListResponse,
   type ApiJobStatus,
+  type CalendarResponse,
   type CurrentUserResponse,
   type GoogleAuthPayload,
   type HealthResponse,
@@ -138,6 +139,13 @@ export const api = {
   /** GET /auth/me — поточний користувач (авторизований). */
   me(): Promise<CurrentUserResponse> {
     return request<CurrentUserResponse>('/auth/me')
+  },
+
+  // --- Calendar (read-only тижневий timesheet) -----------------------------
+
+  /** GET /calendar — тиждень блоків зі станом синку за період (read-only). */
+  calendar(period: Period): Promise<CalendarResponse> {
+    return request<CalendarResponse>(`/calendar${qs({ ...period })}`)
   },
 
   // --- TimeCamp ------------------------------------------------------------

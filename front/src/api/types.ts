@@ -127,6 +127,35 @@ export interface WorklogSyncTasksResponse {
   items: WorklogSyncTask[]
 }
 
+// Calendar (capability api-calendar / frontend-calendar) --------------------
+
+/** Стан блоку календаря (проекція `StatusTaskEnum`). Бекенд віддає лише ці
+ *  три; `failed` — суто фронтовий error-стиль (forward-compat, не з бекенда). */
+export type CalendarStatus = 'service' | 'tempo' | 'synced'
+
+/** Проект блоку — джерело кольору і назви. */
+export interface CalendarProject {
+  key: string | null
+  name: string | null
+  color: string | null
+}
+
+/** Один блок робочого часу (read-проекція tc_entry ⋈ WST ⋈ tc_project). */
+export interface CalendarBlock {
+  id: number
+  start: string // ISO datetime
+  end: string // ISO datetime
+  issue_key: string | null
+  description: string | null
+  status: CalendarStatus
+  project: CalendarProject
+}
+
+/** Відповідь GET /calendar — тиждень блоків. */
+export interface CalendarResponse {
+  blocks: CalendarBlock[]
+}
+
 // Sync journal (api_jobs) ---------------------------------------------------
 
 export interface ApiJobSummary {

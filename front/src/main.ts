@@ -9,6 +9,7 @@ import '@/styles/primitives.css'
 import '@/styles/shell.css'
 import '@/styles/auth.css'
 import '@/styles/data.css'
+import '@/styles/calendar.css'
 
 import { setTokenProvider, setUnauthorizedHandler } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'

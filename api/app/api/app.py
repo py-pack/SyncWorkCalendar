@@ -16,6 +16,7 @@ from .routers import jr_issues as jr_issues_router
 from .routers import sync_status as sync_status_router
 from .routers import sync_triggers as sync_triggers_router
 from .routers import users as users_router
+from .routers import calendar as calendar_router
 
 
 log = logging.getLogger(__name__)
@@ -97,6 +98,9 @@ def create_app() -> FastAPI:
         sync_triggers_router.router, prefix="/sync", tags=["sync-triggers"]
     )
     app.include_router(users_router.router, prefix="/users", tags=["users"])
+    app.include_router(
+        calendar_router.router, prefix="/calendar", tags=["calendar"]
+    )
 
     return app
 

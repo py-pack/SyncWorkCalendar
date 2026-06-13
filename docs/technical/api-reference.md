@@ -161,6 +161,8 @@ running ──success──▶ needs_verification ──POST /api-jobs/{id}/veri
 - `GET /jr-issues?project_id=` — задачі Jira з локальної БД (read-only)
 - `GET /worklog-sync-tasks?start=&end=&status=`
 - `GET /tc-entries/untracked?start=&end=`
+- `GET /calendar?start=&end=` — тиждень блоків робочого часу (read-only;
+  деталі нижче, §5.1)
 - **Users CRUD** (`api-users-management`):
   - `GET /users` — список (без `password_hash`)
   - `POST /users` — body `{username, email, worker_key?, password?}`; invite без
@@ -180,6 +182,44 @@ running ──success──▶ needs_verification ──POST /api-jobs/{id}/veri
 Усі sync-endpoint-и приймають `?background=true` — повертають `202` з
 `{job_id, status: "running"}`. Без прапора — `200` із
 `{job_id, status: "needs_verification", result}`.
+
+### 5.1 Календар (`GET /calendar`, capability `api-calendar`)
+
+Read-only тижневий timesheet. Повертає блоки робочого часу авторизованого
+`worker_key` за період. **Нічого не пише** і **не вимагає нових колонок** —
+читає наявні `tc_entries` ⋈ `tc_projects` ⋈ `worklog_sync_tasks` (фаза 2,
+`add-calendar-timesheet`, D-016).
+
+- **Query:** `start`, `end` (ISO `yyyy-mm-dd`). Без параметрів — поточний
+  ISO-тиждень (Пн–Нд). `start > end` → `400`. Без токена → `401`.
+- **Скоупінг:** WST приєднується лише за поточним `worker_key` (чужий стан не
+  протікає). `tc_entries` не мають `worker_key` — у single-user-контексті
+  показуються всі (точний multi-user-скоупінг — майбутня робота).
+- **Деривація стану блоку** (`status`) із `StatusTaskEnum`:
+  немає WST або `pre_create` → `service`; `created`/`updated` → `synced`;
+  решта (`create` тощо) → `tempo`. **`failed` не повертається** — такого
+  статусу у WST немає (це стан `api_jobs`, D-015).
+
+```jsonc
+// 200 OK
+{
+  "blocks": [
+    {
+      "id": 123,                       // = tc_entry.id
+      "start": "2026-06-01T09:00:00",
+      "end":   "2026-06-01T10:30:00",
+      "issue_key": "TEAM-42",          // WST → meta.task → project.issue_key
+      "description": "...",
+      "status": "synced",              // service | tempo | synced
+      "project": { "key": "TEAM-1", "name": "...", "color": "#.." }
+    }
+  ]
+}
+```
+
+Порожній період → `{"blocks": []}`. Редагування/створення/sync блоків і
+round-trip у Tempo — поза цією фазою (майбутні `add-calendar-editing` /
+`add-worklog-update-flow`).
 
 ## 6. CORS
 

@@ -35,10 +35,20 @@
     `api-google-auth` + **MODIFIED** `frontend-app`. Рішення — `decisinLog.md`
     → D-013 (Google-вхід), D-014 (front HTTP-клієнт: authed-by-default +
     токен через DI-provider).
-  - [`add-calendar-timesheet`](../../openspec/changes/add-calendar-timesheet/)
-    — тижневий календар із повним редагуванням і записом на бекенд.
-    Capability: `frontend-calendar`, `api-calendar` (редаговний блок =
-    `worklog_sync_tasks` + `billable`; активує `pre_update→update→updated`).
+  - [`add-calendar-timesheet`](../../openspec/changes/archive/2026-06-13-add-calendar-timesheet/)
+    — **заархівовано 2026-06-13** (read-only візуалізація, D-016; реалізація +
+    браузерний QA пройдено наживо). `GET /calendar` (read поверх
+    `tc_entries`⋈`tc_projects`⋈WST, **без міграції**, alembic head
+    `10b7dc50b00f`) + фронт-екран тижня (сітка, блоки 3 варіанти, стани
+    `service`/`tempo`/`synced` + `failed` forward-compat, тулбар, фільтри,
+    навігація тижнями, тоталі, панель деталей-перегляд). Backend:
+    `routers/calendar.py`, `schemas/calendar.py`, `TCEntriesDAO.get_calendar_blocks`.
+    Frontend: `CalendarView` + `components/calendar/*` + `stores/calendar.ts` +
+    `lib/calendar.ts` + `styles/calendar.css` + `api.calendar`. `npm run build`
+    чисто; 401-контракт перевірено. **2 нові capability злиті в `openspec/specs/`
+    і канонічні: `api-calendar`, `frontend-calendar`.** Редагування/sync/round-trip
+    і колонка `billable` — у майбутні `add-calendar-editing` /
+    `add-worklog-update-flow`.
   - [`add-data-screens`](../../openspec/changes/archive/2026-06-13-add-data-screens/) —
     **заархівовано 2026-06-13** (29/35; секція 9 QA — частково живцем, решта
     відкладена). Backend: Users CRUD (invite без пароля → Google; `password_hash
@@ -50,7 +60,8 @@
     `frontend-sync-journal`, `frontend-users`, `api-users-management`,
     `api-jira-read`) і канонічні.
   - Відкладено окремими майбутніми змінами: RBAC-ролі, untracked→issue
-    matching.
+    matching, редагування календаря (`add-calendar-editing`), update/delete
+    worklog-ів у Tempo (`add-worklog-update-flow`).
 - [`restructure-monorepo-frontend`](../../openspec/changes/archive/2026-06-12-restructure-monorepo-frontend/)
   — заархівована **2026-06-12** (end-to-end запуск підтверджено). Монорепо:
   бекенд `api/` (пакет `app`, переїхав із `src/`), фронт `front/` (Vue 3 +
@@ -81,9 +92,13 @@
 
 ## Що не реалізовано
 
-- Сценарій оновлення (`pre_update → update → updated`) — статуси оголошені,
-  логіки немає.
-- Видалення раніше створених worklog-ів у `Tempo`.
+- Сценарій оновлення (`pre_update → update → updated`) і видалення раніше
+  створених worklog-ів у `Tempo` — статуси оголошені, логіки немає; винесено в
+  майбутню `add-worklog-update-flow` (активується редагуванням/видаленням
+  `synced`-блоку календаря).
+- Редагування календаря (CRUD блоків, drag/resize/split/duplicate/delete,
+  per-block і масовий sync, колонка `billable`) — майбутня `add-calendar-editing`
+  (календар поки read-only, D-016).
 - Тести (юніт/інтеграційні) і CI.
 - Повноцінне управління користувачами — **частково закрито** зміною
   `add-data-screens`: є CRUD через API (`GET/POST/PATCH/DELETE /users`, invite

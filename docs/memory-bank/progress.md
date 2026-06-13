@@ -22,6 +22,27 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`rework-projects-screen`](../../openspec/changes/rework-projects-screen/) —
+  **реалізовано 2026-06-13 (27/27 код-задач; браузерний QA 11.2 — наживо;
+  git-commit). `validate --strict` OK, `npm run build` і бекенд-OpenAPI —
+  чисті.** Переробка під-вʼюхи «Проекти → TimeCamp»: прибрано авто-синк + лінива
+  загрузка по під-вʼюхах (одна сторінка = один запит, Jira-проекти лише при
+  переході на вкладку Jira; 6→1 запит), дерево за `parent_id` + кольори
+  (`color`), архівні тьмяні, попап налаштувань синку (тогл + select задачі з
+  пошуком) замість інлайн-тогла, назва+колір змапованої Jira-задачі (закриті
+  тьмяні), окрема явна кнопка синку. BREAKING `GET /tc-projects` (без `start`/
+  `end`/`entries_count`; +`parent_id`/`color`/`issue_name`/`issue_active`/фільтр
+  `active`); `GET /jr-issues` +пошук `q`/`limit`/`active` (дефолт `limit=10`).
+  Без alembic-міграції (head `10b7dc50b00f`). Backend: новий
+  `app/core/utils/issue_status.py`, правки `tc_projects`/`jr_issues`
+  роутерів+схем+`jr_issues_dao`. Frontend: новий `lib/tree.ts` +
+  `components/projects/SyncSettingsModal.vue`, переписані `TcProjects`/
+  `ProjectsView`, store `tables.ts` (loaders по під-вʼюхах + `syncProjects`/
+  `saveTcSync`/`jrIssueSearch`). 3 MODIFIED capability:
+  `api-tc-projects-management`, `api-jira-read`, `frontend-data-tables`. Рішення
+  — `decisinLog.md` → D-017. **Уточнення за фідбеком:** фільтр — за `is_sync`
+  (клієнтський, не `is_archived`), + швидке поле пошуку по локальних даних, тег
+  задачі біля назви, кнопка синку — кожен сервіс незалежно (`allSettled`).
 - [`extract-projects-screen`](../../openspec/changes/archive/2026-06-13-extract-projects-screen/)
   — **заархівовано 2026-06-13 (17/20; секції 5.2–5.4 — браузерний QA — на живу
   перевірку). 3 capability-дельти злиті в `openspec/specs/` і канонічні:

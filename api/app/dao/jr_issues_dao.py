@@ -47,14 +47,37 @@ class JRIssuesDAO(BaseDAO):
         )
         return list(query.mappings().all())
 
+    # Верхня межа `limit` для select-а з пошуком (щоб не віддавати все).
+    _LIMIT_CAP = 50
+
     @classmethod
     async def list_filtered(
-        cls, db: AsyncSession, project_id: int | None = None
+        cls,
+        db: AsyncSession,
+        project_id: int | None = None,
+        q: str | None = None,
+        limit: int | None = None,
     ) -> list[JRIssue]:
-        """Задачі з локальної БД для екрана Jira; опційний фільтр за проектом."""
+        """Задачі з локальної БД для екрана Jira / select-а з пошуком.
+
+        Опційний фільтр за проектом (`project_id`), пошук `q` (ILIKE `%q%` по
+        `key` OR `name`) і `limit` (капується `_LIMIT_CAP`). За наявності `q`
+        сортуємо `updated_at DESC` («останні за релевантністю»), інакше — за `key`.
+        """
         stmt = select(cls.model)
         if project_id is not None:
             stmt = stmt.where(cls.model.jr_project_id == project_id)
-        stmt = stmt.order_by(cls.model.key)
+
+        if q:
+            pattern = f"%{q}%"
+            stmt = stmt.where(
+                cls.model.key.ilike(pattern) | cls.model.name.ilike(pattern)
+            ).order_by(cls.model.updated_at.desc())
+        else:
+            stmt = stmt.order_by(cls.model.key)
+
+        if limit is not None:
+            stmt = stmt.limit(min(limit, cls._LIMIT_CAP))
+
         result = await db.execute(stmt)
         return list(result.scalars().all())

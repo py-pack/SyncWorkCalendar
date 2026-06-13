@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// Під-вʼюха «Проекти → Jira». Дані вантажить батьківський ProjectsView;
-// тут лише розмітка таблиці й тогл is_watched (перенесено з JiraView).
-import { computed } from 'vue'
+// Під-вʼюха «Проекти → Jira». Вантажить власні дані при відкритті вкладки
+// (лише GET /jr-projects, ідемпотентно) — Jira-проекти НЕ тягнуться завчасно,
+// доки користувач не перейде сюди (D10). Тогл is_watched — як раніше.
+import { computed, onMounted } from 'vue'
 
 import DataTable from '@/components/data/DataTable.vue'
 import type { Column } from '@/components/data/types'
@@ -12,6 +13,10 @@ import { useTablesStore } from '@/stores/tables'
 
 const { t } = useI18n()
 const store = useTablesStore()
+
+onMounted(() => {
+  void store.loadJrProjects()
+})
 
 const cols = computed<Column[]>(() => [
   { key: 'key', label: t.value.col_key, width: 90 },

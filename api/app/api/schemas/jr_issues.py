@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
+
+from app.core.utils import is_issue_active
 
 
 class JRIssueItem(BaseModel):
@@ -19,3 +21,9 @@ class JRIssueItem(BaseModel):
     estimate_plan: int
     estimate_fact: int
     estimate_rest: int
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def active(self) -> bool:
+        """`True`, якщо `status` не в «done»-сеті (похідне, для тьмяності в UI)."""
+        return is_issue_active(self.status)

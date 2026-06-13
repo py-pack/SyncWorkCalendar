@@ -1,7 +1,9 @@
 /* =========================================================================
-   Sync Work — стор дані-екранів TimeCamp / Jira / Tempo. Період — поточний
-   місяць (period-based endpoint-и); тогли пишуться через PATCH і оновлюють
-   рядок локально; sync-тригери після успіху перезавантажують свій розділ.
+   Sync Work — стор дані-екранів TimeCamp / Jira / Tempo. Записи/Tempo —
+   period-based (поточний місяць); ПРОЕКТИ — без періоду, кожна під-вʼюха
+   вантажить власні дані одним запитом, ідемпотентно (rework-projects-screen).
+   Тогли/налаштування пишуться через PATCH і оновлюють рядок локально;
+   sync-тригери після успіху перезавантажують свій розділ.
    ========================================================================= */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -30,9 +32,12 @@ export const useTablesStore = defineStore('tables', () => {
 
   // TimeCamp
   const tcProjects = ref<TCProject[]>([])
+  const tcProjectsLoaded = ref(false)
+  const tcActive = ref<'active' | 'inactive' | 'all'>('all')
   const tcUntracked = ref<UntrackedEntry[]>([])
   // Jira
   const jrProjects = ref<JRProject[]>([])
+  const jrProjectsLoaded = ref(false)
   const jrIssues = ref<JRIssue[]>([])
   // Tempo / worklog sync tasks
   const wst = ref<WorklogSyncTask[]>([])
@@ -42,13 +47,30 @@ export const useTablesStore = defineStore('tables', () => {
 
   // ---- loaders (по екранах) ----
 
-  /** Екран «Проекти»: обидва джерела проектів (TimeCamp + Jira). */
-  async function loadProjects(): Promise<void> {
+  // Під-вʼюхи «Проектів» вантажать СВОЄ джерело окремо, по одному запиту
+  // (D10). Кожен loader ідемпотентний (guard за `*Loaded`), щоб перемикання
+  // вкладок туди-сюди не пере-запитувало; `force` — для явного синку/фільтра.
+
+  /** Під-вʼюха TimeCamp: лише `GET /tc-projects` (усі проекти одним запитом).
+   *  Фільтр `tcActive` (за `is_sync`) застосовується на клієнті — без re-fetch. */
+  async function loadTcProjects(opts?: { force?: boolean }): Promise<void> {
+    if (tcProjectsLoaded.value && !opts?.force) return
     error.value = null
     try {
-      const [tc, jr] = await Promise.all([api.tcProjects(period), api.jrProjects()])
-      tcProjects.value = tc
-      jrProjects.value = jr
+      tcProjects.value = await api.tcProjects()
+      tcProjectsLoaded.value = true
+    } catch (e) {
+      error.value = errMsg(e)
+    }
+  }
+
+  /** Під-вʼюха Jira: лише `GET /jr-projects` (тягнеться при відкритті вкладки). */
+  async function loadJrProjects(opts?: { force?: boolean }): Promise<void> {
+    if (jrProjectsLoaded.value && !opts?.force) return
+    error.value = null
+    try {
+      jrProjects.value = await api.jrProjects()
+      jrProjectsLoaded.value = true
     } catch (e) {
       error.value = errMsg(e)
     }
@@ -64,11 +86,15 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  /** Екран Jira: задачі + проекти Jira (потрібні для кольорового тегу задачі). */
+  /** Екран Jira: задачі + проекти Jira (потрібні для кольорового тегу задачі).
+   *  `limit: 50` — стеля контракту `/jr-issues` (дефолт 10 — для select-а). */
   async function loadIssues(): Promise<void> {
     error.value = null
     try {
-      const [issues, projects] = await Promise.all([api.jrIssues(), api.jrProjects()])
+      const [issues, projects] = await Promise.all([
+        api.jrIssues({ limit: 50 }),
+        api.jrProjects(),
+      ])
       jrIssues.value = issues
       jrProjects.value = projects
     } catch (e) {
@@ -87,11 +113,21 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  // ---- local toggles (PATCH) ----
+  // ---- local writes (PATCH) ----
 
-  async function toggleTcSync(p: TCProject): Promise<void> {
-    const updated = await api.patchTcProject(p.id, { is_sync: !p.is_sync })
+  /** Зберегти налаштування синку TC-проекту з попапа (PATCH + локальне оновлення).
+   *  PATCH повертає повний шейп (з резолвом `issue_name`), тож рядок замінюємо. */
+  async function saveTcSync(
+    id: number,
+    patch: { is_sync: boolean; issue_key?: string },
+  ): Promise<void> {
+    const updated = await api.patchTcProject(id, patch)
     tcProjects.value = tcProjects.value.map((x) => (x.id === updated.id ? updated : x))
+  }
+
+  /** Пошук задач для select-а в попапі (до 10, з похідним `active`). */
+  function jrIssueSearch(q: string): Promise<JRIssue[]> {
+    return api.jrIssues({ q, limit: 10 })
   }
 
   async function toggleJrWatched(p: JRProject): Promise<void> {
@@ -99,33 +135,39 @@ export const useTablesStore = defineStore('tables', () => {
     jrProjects.value = jrProjects.value.map((x) => (x.id === updated.id ? updated : x))
   }
 
+  // ---- явний синк проектів (кнопка в шапці «Проектів», ніколи не авто, D9) ----
+
+  /** Синк проектів для КОЖНОГО сервісу незалежно (TimeCamp + Jira), потім reload
+   *  завантажених джерел. `allSettled` — щоб збій одного сервісу не блокував інший. */
+  async function syncProjects(): Promise<void> {
+    error.value = null
+    const results = await Promise.allSettled([api.syncTcProjects(), api.syncJrProjects()])
+
+    const tasks: Promise<void>[] = []
+    if (tcProjectsLoaded.value) tasks.push(loadTcProjects({ force: true }))
+    if (jrProjectsLoaded.value) tasks.push(loadJrProjects({ force: true }))
+    await Promise.all(tasks)
+
+    const failed = results.find((r) => r.status === 'rejected')
+    if (failed) {
+      const reason = (failed as PromiseRejectedResult).reason
+      error.value = errMsg(reason)
+      throw reason // щоб кнопка синку показала помилку, а не «done»
+    }
+  }
+
   // ---- авто-синк із зовнішніх джерел при відкритті екрана ----
   // Екран спершу показує дані з БД (load*), потім у фоні тягне свіже з
   // TimeCamp/Jira і перезавантажує. Захист від флуду: не пере-синкати, якщо
   // синкали менш ніж SYNC_TTL_MS тому (швидка навігація туди-сюди).
   //
-  // Кожне джерело синкається рівно з ОДНОГО екрана (D4): проекти — з «Проектів»,
-  // записи — з TimeCamp, задачі — з Jira.
+  // Лишилось для записів (TimeCamp) і задач (Jira); ПРОЕКТИ авто-синку більше
+  // не мають — лише явна кнопка `syncProjects` (D9).
 
   // 5 хв: кожен синк створює api_jobs (needs_verification), тож не пере-синкаємо
   // частіше — дані щонайбільше 5-хв давнини, без потоку job-ів на кожну навігацію.
   const SYNC_TTL_MS = 5 * 60_000
-  const lastSync = { projects: 0, entries: 0, issues: 0 }
-
-  /** Екран «Проекти»: освіжити проекти TimeCamp + Jira. */
-  async function autoSyncProjects(): Promise<void> {
-    const now = Date.now()
-    if (now - lastSync.projects < SYNC_TTL_MS) return
-    lastSync.projects = now
-    try {
-      await api.syncTcProjects()
-      await api.syncJrProjects()
-      await loadProjects()
-    } catch (e) {
-      error.value = errMsg(e)
-      lastSync.projects = 0 // дозволити повтор після помилки
-    }
-  }
+  const lastSync = { entries: 0, issues: 0 }
 
   /** Екран TimeCamp: освіжити записи за період. */
   async function autoSyncEntries(): Promise<void> {
@@ -175,19 +217,24 @@ export const useTablesStore = defineStore('tables', () => {
   return {
     period,
     tcProjects,
+    tcProjectsLoaded,
+    tcActive,
     tcUntracked,
     jrProjects,
+    jrProjectsLoaded,
     jrIssues,
     wst,
     wstSummary,
     error,
-    loadProjects,
+    loadTcProjects,
+    loadJrProjects,
     loadUntracked,
     loadIssues,
     loadTempo,
-    toggleTcSync,
+    saveTcSync,
+    jrIssueSearch,
     toggleJrWatched,
-    autoSyncProjects,
+    syncProjects,
     autoSyncEntries,
     autoSyncIssues,
     syncWstPrepare,

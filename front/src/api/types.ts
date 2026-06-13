@@ -57,10 +57,15 @@ export interface SyncTriggerResult {
 export interface TCProject {
   id: number
   name: string
+  parent_id: number | null
+  color: string | null
+  is_archived: boolean
   is_sync: boolean
   issue_key: string | null
-  is_archived: boolean
-  entries_count: number
+  /** Назва змапованої Jira-задачі (резолв на беку); null — не змаплено/не знайдено. */
+  issue_name: string | null
+  /** Статус задачі не в «done»-сеті; null — issue_name не резолвнуто. */
+  issue_active: boolean | null
 }
 
 export interface TCProjectPatch {
@@ -100,6 +105,8 @@ export interface JRIssue {
   type: string
   priority: string
   status: string
+  /** Похідне: статус не в «done»-сеті (для тьмяності закритих задач). */
+  active: boolean
   epic_key: string | null
   parent_key: string | null
   estimate_plan: number

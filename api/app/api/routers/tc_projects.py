@@ -1,79 +1,74 @@
-from datetime import date, datetime, time, timezone
-from calendar import monthrange
+from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user, get_db
-from app.api.schemas.tc_projects import (
-    TCProjectPatchRequest,
-    TCProjectResponse,
-    TCProjectWithCount,
-)
+from app.api.schemas.tc_projects import TCProjectItem, TCProjectPatchRequest
+from app.core.utils import is_issue_active
 from app.dao import TCProjectDAO
-from app.models import TCEntry, TCProject
+from app.models import JRIssue, TCProject
 
 
 router = APIRouter()
 
 
-def _default_period() -> tuple[date, date]:
-    today = datetime.now(timezone.utc).date()
-    last_day = monthrange(today.year, today.month)[1]
-    return today.replace(day=1), today.replace(day=last_day)
+def _item(
+    project: TCProject,
+    issue_name: str | None,
+    issue_status: str | None,
+) -> TCProjectItem:
+    # issue_active — лише коли задачу резолвнуто локально (name NOT NULL);
+    # інакше null (проект не змаплено / ключ не знайдено в jr_issues).
+    issue_active = (
+        is_issue_active(issue_status) if issue_name is not None else None
+    )
+    return TCProjectItem(
+        id=project.id,
+        name=project.name,
+        parent_id=project.parent_id,
+        color=project.color,
+        is_archived=project.is_archived,
+        is_sync=project.is_sync,
+        issue_key=project.issue_key,
+        issue_name=issue_name,
+        issue_active=issue_active,
+    )
 
 
-@router.get("", response_model=list[TCProjectWithCount])
+@router.get("", response_model=list[TCProjectItem])
 async def list_tc_projects(
-    start: date | None = Query(default=None),
-    end: date | None = Query(default=None),
+    active: Literal["active", "inactive", "all"] = Query(default="all"),
     _current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[TCProjectWithCount]:
-    if start is None or end is None:
-        start_default, end_default = _default_period()
-        start = start or start_default
-        end = end or end_default
-    if start > end:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start must be <= end")
-
-    period_lo = datetime.combine(start, time.min)
-    period_hi = datetime.combine(end, time.max)
-
-    counts_subq = (
-        select(TCEntry.tc_project_id, func.count().label("cnt"))
-        .where(TCEntry.start_at >= period_lo, TCEntry.start_at <= period_hi)
-        .group_by(TCEntry.tc_project_id)
-        .subquery()
-    )
-
+) -> list[TCProjectItem]:
+    # Резолв назви/статусу змапованої задачі одним LEFT JOIN (soft-link за
+    # рядком-ключем, не FK) — щоб клієнт не тягнув усі задачі (D2).
     stmt = (
-        select(TCProject, func.coalesce(counts_subq.c.cnt, 0).label("entries_count"))
-        .outerjoin(counts_subq, counts_subq.c.tc_project_id == TCProject.id)
+        select(TCProject, JRIssue.name, JRIssue.status)
+        .outerjoin(JRIssue, TCProject.issue_key == JRIssue.key)
         .order_by(TCProject.name)
     )
+    if active == "active":
+        stmt = stmt.where(TCProject.is_archived.is_(False))
+    elif active == "inactive":
+        stmt = stmt.where(TCProject.is_archived.is_(True))
+
     rows = (await db.execute(stmt)).all()
     return [
-        TCProjectWithCount(
-            id=p.id,
-            name=p.name,
-            is_sync=p.is_sync,
-            issue_key=p.issue_key,
-            is_archived=p.is_archived,
-            entries_count=int(cnt),
-        )
-        for p, cnt in rows
+        _item(p, issue_name, issue_status)
+        for p, issue_name, issue_status in rows
     ]
 
 
-@router.patch("/{tc_project_id}", response_model=TCProjectResponse)
+@router.patch("/{tc_project_id}", response_model=TCProjectItem)
 async def patch_tc_project(
     tc_project_id: int,
     body: TCProjectPatchRequest = Body(...),
     _current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> TCProjectResponse:
+) -> TCProjectItem:
     update_fields = body.model_dump(exclude_unset=True)
     if not update_fields:
         raise HTTPException(
@@ -83,9 +78,28 @@ async def patch_tc_project(
 
     project = await TCProjectDAO.find(db, tc_project_id)
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TC project not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TC project not found",
+        )
 
     for field, value in update_fields.items():
         setattr(project, field, value)
     db.add(project)
-    return TCProjectResponse.model_validate(project)
+
+    # Резолв назви/статусу для (можливо оновленого) issue_key — щоб відповідь
+    # мала той самий повний шейп, що й list (клієнт замінює рядок цілком).
+    issue_name: str | None = None
+    issue_status: str | None = None
+    if project.issue_key:
+        row = (
+            await db.execute(
+                select(JRIssue.name, JRIssue.status).where(
+                    JRIssue.key == project.issue_key
+                )
+            )
+        ).first()
+        if row is not None:
+            issue_name, issue_status = row
+
+    return _item(project, issue_name, issue_status)

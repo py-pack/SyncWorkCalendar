@@ -8,6 +8,59 @@
 2 нові capability злиті в `openspec/specs/` і канонічні: `api-calendar`,
 `frontend-calendar`. Лишився лише git-commit.
 
+## Активна зміна (реалізовано, не заархівовано): `rework-projects-screen` (2026-06-13)
+
+**Реалізовано 2026-06-13 (27/27 код-задач; лишився браузерний QA — секція 11.2
+— наживо, і git-commit). `validate --strict` — OK; `npm run build` і
+бекенд-контракт (OpenAPI) — чисті.** Тека —
+[`changes/rework-projects-screen/`](../../openspec/changes/rework-projects-screen/).
+Переробка під-вʼюхи **«Проекти → TimeCamp»**: відкриття екрана робило **6 запитів**
+(2 GET даних + 2 POST авто-синку + 2 GET reload) — авто-синк прибрано повністю,
+а дані вантажить **кожна під-вʼюха сама** (TimeCamp → лише `GET /tc-projects`;
+Jira-проекти — лише при переході на вкладку Jira), тож відкриття сторінки: **6→1**
+запит. TimeCamp-проекти стали **деревом** (`parent_id`) з кольором
+(`color`); архівні — тьмяні; інлайн-тогл `is_sync` замінено **попапом
+налаштувань** (тогл синку + select задачі з пошуком, Save заблоковано без задачі);
+маппінг показує **назву** Jira-задачі тінтовану кольором проекту (закриті задачі
+тьмяні); синк проектів — **окрема явна кнопка**, ніколи не авто. **BREAKING-контракт
+`GET /tc-projects`:** прибрано `start`/`end` і `entries_count`, додано
+`parent_id`/`color`/`issue_name`/`issue_active` + фільтр `active=active|inactive|all`;
+`GET /jr-issues` отримав пошук `q`/`limit` + похідний `active`. **Без alembic-міграції**
+(усі колонки вже є). 3 MODIFIED capability: `api-tc-projects-management` (+GET-вимога),
+`api-jira-read` (пошук+`active`), `frontend-data-tables` («Екран «Проекти»»: дерево/
+попап/без авто-синку). Рішення — `design.md` (D1–D10) і Memory Bank → **D-017**.
+
+**Реалізація:**
+- **Backend (`api/`):** новий `app/core/utils/issue_status.py`
+  (`is_issue_active` + `DONE_STATUSES`, спільний для обох endpoint-ів);
+  `schemas/tc_projects.py` — `TCProjectItem` (дерево+маппінг, без
+  `entries_count`); `routers/tc_projects.py` — GET без `start`/`end`, LEFT JOIN
+  `jr_issues`, фільтр `active`, PATCH повертає той самий повний шейп з резолвом;
+  `schemas/jr_issues.py` — `computed_field active`; `routers/jr_issues.py` +
+  `dao/jr_issues_dao.py` `list_filtered` — `q`/`limit` (дефолт 10, кап ≤50).
+- **Frontend (`front/`):** `api/types.ts` (`TCProject` дерево-поля,
+  `JRIssue.active`); `api/client.ts` (`tcProjects(active?)`, `jrIssues({q,limit})`);
+  `stores/tables.ts` — прибрано `autoSyncProjects`/`loadProjects`/`toggleTcSync`,
+  додано `loadTcProjects`/`loadJrProjects` (ідемпотентні, по під-вʼюхах),
+  `saveTcSync`, `jrIssueSearch`, `syncProjects` (явна кнопка); новий
+  `lib/tree.ts` (`buildTree`/`flattenTree`/`safeColor`, orphan-hoisting); нова
+  `components/projects/SyncSettingsModal.vue` (Sheet-попап); переписано
+  `views/projects/TcProjects.vue` (дерево/тег/фільтр/попап) і `ProjectsView.vue`
+  (без авто-load, ліниві лічильники, кнопка синку); `JrProjects.vue` (власний
+  `loadJrProjects` на mount); `styles/data.css` (`.tct*`/`.ssm*`); `i18n` (UK+EN).
+  Побічно: `JiraView` тепер просить `jrIssues({limit:50})`, бо дефолт `/jr-issues`
+  став 10. Продуктові розвилки підтверджено користувачем (прибрати
+  `entries_count`/date-фільтр; синк лише кнопкою; тьмянити і архівні TC-проекти,
+  і закриті Jira-задачі).
+- **Уточнення за фідбеком користувача (та сама сесія, після першої реалізації;
+  деталі — `decisinLog.md` → D-017):** (1) фільтр під-вʼюхи TimeCamp — за станом
+  синку (`is_sync`), **клієнтський** (не `is_archived` серверний; бекендний
+  `active`-param лишився як опційна можливість API, UI його не використовує);
+  (2) додано **швидке поле пошуку** по локальних даних (`name`/`issue_key`/
+  `issue_name`); (3) тег задачі перенесено **одразу до назви** проекту;
+  (4) кнопка синку запускає **кожен сервіс незалежно** (`allSettled`). `npm run
+  build` лишається чистим.
+
 ## Заархівована зміна: `extract-projects-screen` (2026-06-13)
 
 **Створено, реалізовано і заархівовано 2026-06-13 (17/20 задач; секції 5.2–5.4

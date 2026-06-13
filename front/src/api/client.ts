@@ -150,9 +150,9 @@ export const api = {
 
   // --- TimeCamp ------------------------------------------------------------
 
-  /** GET /tc-projects — проекти TimeCamp з лічильником записів за період. */
-  tcProjects(period?: Period): Promise<TCProject[]> {
-    return request<TCProject[]>(`/tc-projects${period ? qs({ ...period }) : ''}`)
+  /** GET /tc-projects — проекти TimeCamp (дерево + маппінг); фільтр `active`. */
+  tcProjects(active?: 'active' | 'inactive' | 'all'): Promise<TCProject[]> {
+    return request<TCProject[]>(`/tc-projects${qs({ active })}`)
   },
 
   /** PATCH /tc-projects/{id} — локальні прапори (`is_sync`, `issue_key`). */
@@ -187,9 +187,11 @@ export const api = {
     return request<JRProject>(`/jr-projects/${id}`, jsonBody(body, 'PATCH'))
   },
 
-  /** GET /jr-issues — задачі Jira з локальної БД; опційний фільтр за проектом. */
-  jrIssues(projectId?: number): Promise<JRIssue[]> {
-    return request<JRIssue[]>(`/jr-issues${qs({ project_id: projectId })}`)
+  /** GET /jr-issues — задачі Jira з локальної БД; фільтр за проектом / пошук. */
+  jrIssues(params?: { projectId?: number; q?: string; limit?: number }): Promise<JRIssue[]> {
+    return request<JRIssue[]>(
+      `/jr-issues${qs({ project_id: params?.projectId, q: params?.q, limit: params?.limit })}`,
+    )
   },
 
   /** POST /sync/jira/projects — синк проектів Jira. */

@@ -156,8 +156,18 @@ running ──success──▶ needs_verification ──POST /api-jobs/{id}/veri
 - `GET /tc-projects?start=&end=` — список TC-проектів із `entries_count`
 - `PATCH /tc-projects/{id}` — body `{is_sync?, issue_key?}` (`extra=forbid`)
 - `GET /jr-projects`
+- `PATCH /jr-projects/{id}` — body `{is_watched?}` (`extra=forbid`; лише локальний
+  прапор, у Jira нічого не пишемо; `404` на відсутній)
+- `GET /jr-issues?project_id=` — задачі Jira з локальної БД (read-only)
 - `GET /worklog-sync-tasks?start=&end=&status=`
 - `GET /tc-entries/untracked?start=&end=`
+- **Users CRUD** (`api-users-management`):
+  - `GET /users` — список (без `password_hash`)
+  - `POST /users` — body `{username, email, worker_key?, password?}`; invite без
+    пароля → `password_hash NULL`, вхід через Google за `email`; дубль
+    `email`/`username` → `409`
+  - `PATCH /users/{id}` — body `{username?, worker_key?, is_active?}`; `404`/`409`
+  - `DELETE /users/{id}` — `204`; `404` на відсутній
 - `POST /sync/timecamp/projects`
 - `POST /sync/timecamp/entries` body `{start, end}`
 - `POST /sync/jira/projects`
@@ -184,8 +194,10 @@ APP__API__CORS_ORIGINS=http://localhost:3000,https://app.example.com
 
 ## 7. Що поза цією зміною
 
-- **Управління користувачами** (create/list/deactivate/set-password) —
-  окрема майбутня зміна `add-user-management-cli`.
+- **Управління користувачами** — базовий CRUD уже є (`GET/POST/PATCH/DELETE
+  /users`, capability `api-users-management`, invite без пароля → Google-вхід).
+  Лишилось окремою зміною: set-password через API, CLI list/deactivate
+  (`add-user-management-cli`).
 - **TTL/cron для `api_jobs`** — `add-api-jobs-cleanup`.
 - **RBAC**: усі `api_users` мають однакові права, verify може робити
   будь-хто з валідним токеном. Обмеження «лише admin / автор» — `add-rbac`.

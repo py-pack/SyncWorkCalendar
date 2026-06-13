@@ -2,9 +2,34 @@
 
 ## Дата оновлення
 
-2026-06-13 — **фаза 1 веб-UI (`add-web-ui-foundation`) заархівована**
-(специфікації злиті в `openspec/specs/`; код у робочому дереві, ще не
-закомічено); фази 2–3 — на proposal-стадії.
+2026-06-13 — **фази 1 і 3 заархівовані**; код обох у робочому дереві, не
+закомічено. Фаза 2 (`add-calendar-timesheet`) — на proposal-стадії.
+
+## Статус фази 3 (`add-data-screens`) — заархівовано 2026-06-13
+
+Реалізовано (29/35 задач; секція 9 «ручний QA» — частково пройдено живцем, решта
+відкладена). Зміна заархівована в
+[`archive/2026-06-13-add-data-screens/`](../../openspec/changes/archive/2026-06-13-add-data-screens/);
+**5 нових capability злиті в `openspec/specs/` і канонічні**:
+`api-users-management`, `api-jira-read`, `frontend-data-tables`,
+`frontend-sync-journal`, `frontend-users`. Три відкриті питання design.md
+закриті рішеннями користувача (D-015): `name` → переюз `username`; `last_seen` і
+точковий `ids[]` для Tempo — відкладено. Браузерний QA-рефінмент: період читання
+розділено зі sync-періодом + авто-синк при відкритті (теж D-015).
+
+- **Backend:** `api_users.password_hash → nullable` (alembic head
+  **`10b7dc50b00f`**, застосовано); Users CRUD (`GET/POST/PATCH/DELETE /users`,
+  invite без пароля → Google-вхід, дублі email/username → `409`, NULL-хеш login →
+  `401`); Jira-read (`GET /jr-issues?project_id`, `PATCH /jr-projects/{id}` тогл
+  `is_watched`). Smoke-тест 16/16 проти живої БД — PASS. Побічний фікс:
+  `config.py` `extra="ignore"` (спільний `.env` з `VITE_*` ламав локальний
+  старт). Рішення — `decisinLog.md` → **D-015**.
+- **Frontend:** табличний каркас (`DataTable` generic, `Tabs`, `PageHeader`,
+  `StatusBadge`, `SyncBtn`, `ProjTag`), 5 екранів (TimeCamp/Jira/Tempo/Журнал/
+  Користувачі), stores `tables`/`journal`/`users`, методи клієнта + типи,
+  динамічний бейдг `needs_verification` у навігації, нові стилі `data.css`
+  (порт `tables.css`). `npm run build` (`vue-tsc` + `vite`) — чисто.
+- **Залишок:** браузерний QA (секція 9) і git-commit.
 
 ## Статус фази 1 (`add-web-ui-foundation`) — заархівована 2026-06-13
 
@@ -41,8 +66,8 @@
 
 ## Поточний фокус
 
-**Перенесення дизайну Sync Work у фронт — 3 OpenSpec-зміни (фаза 1 —
-заархівована 2026-06-13; фази 2–3 — proposal).** Джерело — handoff-бандл із Claude Design, який лежить **локально в
+**Перенесення дизайну Sync Work у фронт — 3 OpenSpec-зміни (фази 1 і 3 —
+заархівовані 2026-06-13; фаза 2 — proposal).** Джерело — handoff-бандл із Claude Design, який лежить **локально в
 [`docs/design/`](../design/)** (прототип React+CSS у `docs/design/project/src/*`,
 наявний OpenAPI — `docs/design/project/uploads/sync.work.json`). 7 екранів:
 авторизація, календар, таблиці TimeCamp/Jira/Tempo, журнал синку,
@@ -62,11 +87,12 @@
    `worklog_sync_tasks` (+ `billable`), TimeCamp read-only; редагування
    synced-блоку активує зарезервовані `pre_update→update→updated` і
    update/delete worklog у Tempo.
-3. [`add-data-screens`](../../openspec/changes/add-data-screens/) — таблиці
-   TimeCamp/Jira/Tempo, журнал `api_jobs` (з verify), користувачі +
-   **Users CRUD** (`/users`, invite без пароля → вхід через Google; поля
-   `name`, nullable `password_hash`) і мінімальний Jira-read
-   (`GET /jr-issues`, `PATCH /jr-projects/{id}`).
+3. [`add-data-screens`](../../openspec/changes/archive/2026-06-13-add-data-screens/) —
+   **заархівовано 2026-06-13** (див. статус вище). Таблиці TimeCamp/Jira/Tempo,
+   журнал `api_jobs` (з verify), користувачі + **Users CRUD** (`/users`, invite
+   без пароля → вхід через Google; **ім'я = наявний `username`**, nullable
+   `password_hash`) і мінімальний Jira-read (`GET /jr-issues`,
+   `PATCH /jr-projects/{id}`).
 
 **Свідомо відкладено** (UI показує, дія вимкнена; окремі майбутні зміни):
 RBAC-ролі (admin/member/viewer), untracked→issue matching. Усі 3 зміни

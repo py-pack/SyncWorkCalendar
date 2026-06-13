@@ -100,6 +100,11 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         env_prefix="APP__",
         env_ignore_empty=True,
+        # Спільний <root>/.env читають і бекенд, і docker-compose, тож у ньому
+        # легітимно є не-APP__ ключі (напр. VITE_* для фронт-сервісу). Без
+        # extra="ignore" дотенв-джерело валить старт на них (extra_forbidden) —
+        # ігноруємо все, що не під префіксом APP__.
+        extra="ignore",
     )
     db: DatabaseConfig = DatabaseConfig()
     tc: TimeCampConfig = TimeCampConfig()

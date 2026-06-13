@@ -11,7 +11,10 @@ class APIUser(Base):
     __tablename__ = "api_users"
 
     username: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    # nullable — invite-флоу без пароля: адмін заводить користувача через
+    # `POST /users`, той входить через Google за `email`. Логін/пароль для
+    # такого рядка неможливий (роутер логіну дає 401 на NULL-хеш).
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     # E-mail для зіставлення Google-акаунта (match-by-email). UNIQUE, але
     # nullable — старі рядки можуть бути без нього; зберігаємо у нижньому
     # регістрі (нормалізація — на рівні DAO/сервісу).

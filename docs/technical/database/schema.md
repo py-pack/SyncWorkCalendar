@@ -3,8 +3,9 @@
 Ground-truth довідник по схемі локальної Postgres БД `db_swc`. Усі таблиці,
 колонки, типи, ключі, індекси та enum-и зафіксовані з **живої БД** через
 PyCharm DataGrip MCP станом на 2026-05-13. Поточний `alembic head`:
-`c03728fbb1cf` (додано `api_users.email` для Google-входу; попередній —
-`ef2c7288bbb0`, `api_users` + `api_jobs`).
+`10b7dc50b00f` (`api_users.password_hash` → nullable для invite-флоу без
+пароля; попередні — `c03728fbb1cf` додав `api_users.email` для Google-входу,
+`ef2c7288bbb0` — `api_users` + `api_jobs`).
 
 Якщо схема змінилась — оновити цей файл одним прогоном (див. §9). Усі деталі
 поведінки (як саме поле читається/пишеться) — у інтеграційних доках і
@@ -206,7 +207,7 @@ State-machine — у `../../memory-bank/systemPatterns.md`.
 
 | column        | type        | NN | default | примітка                              |
 | ------------- | ----------- | -- | ------- | ------------------------------------- |
-| `version_num` | varchar(32) | ✓  | —       | PK; поточне значення: `ef2c7288bbb0`  |
+| `version_num` | varchar(32) | ✓  | —       | PK; поточне значення: `10b7dc50b00f`  |
 
 ---
 
@@ -218,16 +219,16 @@ State-machine — у `../../memory-bank/systemPatterns.md`.
 
 ### `api_users`
 
-Користувачі HTTP API. Заведення — **ручний INSERT** (інструкція в
-`docs/technical/api-reference.md` § «Перший користувач»); CLI для керування —
-окрема майбутня зміна `add-user-management-cli`. Schема навмисно multi-user-ready,
-див. `decisinLog.md` → D-009.
+Користувачі HTTP API. Заведення — **CRUD через `/users`** (`api-users-management`;
+invite без пароля → вхід через Google за `email`) або `python -m app.cli add_user`.
+Перший користувач — інструкція в `docs/technical/api-reference.md`. Schема
+навмисно multi-user-ready, див. `decisinLog.md` → D-009.
 
 | column          | type        | NN | default                            | примітка                                            |
 | --------------- | ----------- | -- | ---------------------------------- | --------------------------------------------------- |
 | `id`            | integer     | ✓  | `nextval('api_users_id_seq')`      | PK                                                  |
-| `username`      | varchar     | ✓  | —                                  | UNIQUE (`uq_api_users_username`); імʼя для login    |
-| `password_hash` | varchar     | ✓  | —                                  | bcrypt-хеш                                          |
+| `username`      | varchar     | ✓  | —                                  | UNIQUE (`uq_api_users_username`); імʼя для login + відображуване ім'я |
+| `password_hash` | varchar     |    | —                                  | bcrypt-хеш; **nullable** — invite без пароля (вхід через Google); NULL → login дає 401 |
 | `email`         | varchar     |    | —                                  | UNIQUE (`uq_api_users_email`), nullable; зіставлення Google-акаунта (match-by-email, lower-case) |
 | `worker_key`    | varchar     |    | —                                  | Jira key для sync-trigger-ів; null → 400 на worklog-енд |
 | `is_active`     | boolean     | ✓  | —                                  | `false` → login завжди повертає 401                 |

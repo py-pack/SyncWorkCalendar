@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
 import BrandMark from '@/components/BrandMark.vue'
@@ -10,11 +10,21 @@ import IconBtn from '@/components/ui/IconBtn.vue'
 import Segmented from '@/components/ui/Segmented.vue'
 import { useI18n } from '@/i18n'
 import type { Lang } from '@/i18n/strings'
-import { NAV } from '@/lib/nav'
+import { NAV, type NavItem } from '@/lib/nav'
+import { useJournalStore } from '@/stores/journal'
 import { useUiStore } from '@/stores/ui'
 
 const { t, lang, setLang } = useI18n()
 const ui = useUiStore()
+const journal = useJournalStore()
+
+// Бейдж журналу — живий лічильник needs_verification; решта — зі статичного нав-конфігу.
+function badgeFor(item: NavItem): number | undefined {
+  if (item.name === 'journal') return journal.needsCount || undefined
+  return item.badge
+}
+
+onMounted(() => void journal.refreshNeedsCount())
 
 const shellClasses = computed(() => [
   'shell',
@@ -51,8 +61,8 @@ const shellClasses = computed(() => [
           >
             <Icon :name="item.icon" :size="18" />
             <span v-if="!ui.navCollapsed">{{ t[item.titleKey] }}</span>
-            <span v-if="!ui.navCollapsed && item.badge" class="nav__badge">{{ item.badge }}</span>
-            <span v-if="ui.navCollapsed && item.badge" class="nav__badge nav__badge--dot" />
+            <span v-if="!ui.navCollapsed && badgeFor(item)" class="nav__badge">{{ badgeFor(item) }}</span>
+            <span v-if="ui.navCollapsed && badgeFor(item)" class="nav__badge nav__badge--dot" />
           </RouterLink>
         </div>
       </nav>

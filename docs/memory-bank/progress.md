@@ -39,10 +39,16 @@
     — тижневий календар із повним редагуванням і записом на бекенд.
     Capability: `frontend-calendar`, `api-calendar` (редаговний блок =
     `worklog_sync_tasks` + `billable`; активує `pre_update→update→updated`).
-  - [`add-data-screens`](../../openspec/changes/add-data-screens/) — таблиці
-    TimeCamp/Jira/Tempo, журнал, користувачі. Capability:
-    `frontend-data-tables`, `frontend-sync-journal`, `frontend-users`,
-    `api-users-management`, `api-jira-read`.
+  - [`add-data-screens`](../../openspec/changes/archive/2026-06-13-add-data-screens/) —
+    **заархівовано 2026-06-13** (29/35; секція 9 QA — частково живцем, решта
+    відкладена). Backend: Users CRUD (invite без пароля → Google; `password_hash
+    → nullable`, alembic head `10b7dc50b00f`), Jira-read (`GET /jr-issues`, `PATCH
+    /jr-projects/{id}`); smoke 16/16 PASS. Frontend: каркас таблиць + 5 екранів +
+    stores; `npm run build` чисто; період читання 6 міс + авто-синк при відкритті.
+    Ім'я користувача = наявний `username` (без колонки `name`, D-015). **5 нових
+    capability злиті в `openspec/specs/`** (`frontend-data-tables`,
+    `frontend-sync-journal`, `frontend-users`, `api-users-management`,
+    `api-jira-read`) і канонічні.
   - Відкладено окремими майбутніми змінами: RBAC-ролі, untracked→issue
     matching.
 - [`restructure-monorepo-frontend`](../../openspec/changes/archive/2026-06-12-restructure-monorepo-frontend/)
@@ -79,10 +85,10 @@
   логіки немає.
 - Видалення раніше створених worklog-ів у `Tempo`.
 - Тести (юніт/інтеграційні) і CI.
-- Повноцінне управління користувачами через API/CLI — окрема майбутня
-  зміна `add-user-management-cli`. Базовий CLI вже є: `app/cli/` з командою
-  `add_user` (`python -m app.cli add_user`); решта (list/deactivate/змінити
-  пароль/worker_key) — попереду.
+- Повноцінне управління користувачами — **частково закрито** зміною
+  `add-data-screens`: є CRUD через API (`GET/POST/PATCH/DELETE /users`, invite
+  без пароля → Google) + CLI `add_user`. Лишилось окремою зміною
+  `add-user-management-cli`: set-password через API, CLI list/deactivate.
 - TTL/cron для старих `api_jobs` — `add-api-jobs-cleanup`.
 - RBAC, per-user OAuth-токени на Jira/TimeCamp — окремі майбутні зміни.
 
@@ -95,7 +101,8 @@
   а також сесія 2026-06-12: `app/cli/`, `Makefile`, `.python-version` (3.14),
   перехід `passlib → bcrypt` у `pyproject.toml`/`app/api/auth.py`,
   міграція `poetry → uv` (`uv.lock`).
-- Остання міграція: `ef2c7288bbb0` (2026-05-13, `add_api_layer_tables`).
+- Остання міграція: `10b7dc50b00f` (2026-06-13, `make_password_hash_nullable_api_users`;
+  попередня — `c03728fbb1cf` `add_email_to_api_users`). Застосовано.
 - Алембік head відповідає поточним моделям після застосування ревізії.
 
 ## Відомі тех-борги

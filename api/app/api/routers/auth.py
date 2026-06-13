@@ -41,11 +41,14 @@ async def login(
     settings: Settings = Depends(get_settings),
 ) -> TokenResponse:
     user = await APIUserDAO.get_by_username(db, body.username)
-    # Unified 401 for unknown user / wrong password / inactive — by spec
-    # ``api-auth.Scenario: Wrong password``, ``Unknown username``, ``Inactive user``.
+    # Unified 401 for unknown user / wrong password / inactive / passwordless —
+    # by spec ``api-auth.Scenario: Wrong password``, ``Unknown username``,
+    # ``Inactive user`` + invite-флоу (``password_hash IS NULL`` → вхід лише
+    # через Google; перевіряємо до verify_password, бо той не приймає None).
     if (
         user is None
         or not user.is_active
+        or user.password_hash is None
         or not verify_password(body.password, user.password_hash)
     ):
         raise HTTPException(

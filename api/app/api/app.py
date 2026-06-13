@@ -12,8 +12,10 @@ from app.config import settings
 from .routers import health, auth as auth_router, api_jobs as api_jobs_router
 from .routers import tc_projects as tc_projects_router
 from .routers import jr_projects as jr_projects_router
+from .routers import jr_issues as jr_issues_router
 from .routers import sync_status as sync_status_router
 from .routers import sync_triggers as sync_triggers_router
+from .routers import users as users_router
 
 
 log = logging.getLogger(__name__)
@@ -22,7 +24,10 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     settings.require_api_ready()
-    if "*" in settings.api.cors_origins and settings.api.host not in {"127.0.0.1", "localhost"}:
+    if "*" in settings.api.cors_origins and settings.api.host not in {
+        "127.0.0.1",
+        "localhost",
+    }:
         log.warning(
             "CORS is wide open (*) on a non-local host (%s). "
             "Set APP__API__CORS_ORIGINS for production.",
@@ -57,21 +62,41 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(SQLAlchemyError)
     async def _sqlalchemy_handler(request: Request, exc: SQLAlchemyError):
-        log.exception("Database error on %s %s", request.method, request.url.path)
-        return JSONResponse(status_code=500, content={"detail": "database error"})
+        log.exception(
+            "Database error on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500, content={"detail": "database error"}
+        )
 
     @app.exception_handler(RequestException)
     async def _requests_handler(request: Request, exc: RequestException):
-        log.exception("Upstream HTTP error on %s %s", request.method, request.url.path)
-        return JSONResponse(status_code=502, content={"detail": "upstream service error"})
+        log.exception(
+            "Upstream HTTP error on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=502, content={"detail": "upstream service error"}
+        )
 
     app.include_router(health.router)
     app.include_router(auth_router.router, prefix="/auth", tags=["auth"])
-    app.include_router(api_jobs_router.router, prefix="/api-jobs", tags=["api-jobs"])
-    app.include_router(tc_projects_router.router, prefix="/tc-projects", tags=["tc-projects"])
-    app.include_router(jr_projects_router.router, prefix="/jr-projects", tags=["jr-projects"])
+    app.include_router(
+        api_jobs_router.router, prefix="/api-jobs", tags=["api-jobs"]
+    )
+    app.include_router(
+        tc_projects_router.router, prefix="/tc-projects", tags=["tc-projects"]
+    )
+    app.include_router(
+        jr_projects_router.router, prefix="/jr-projects", tags=["jr-projects"]
+    )
+    app.include_router(
+        jr_issues_router.router, prefix="/jr-issues", tags=["jr-issues"]
+    )
     app.include_router(sync_status_router.router, tags=["sync-status"])
-    app.include_router(sync_triggers_router.router, prefix="/sync", tags=["sync-triggers"])
+    app.include_router(
+        sync_triggers_router.router, prefix="/sync", tags=["sync-triggers"]
+    )
+    app.include_router(users_router.router, prefix="/users", tags=["users"])
 
     return app
 

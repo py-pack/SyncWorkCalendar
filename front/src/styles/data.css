@@ -123,6 +123,10 @@
 .tct__statedot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
 .tct__state.is-on .tct__statedot { background: var(--green); }
 
+/* лічильник задач (Jira-проекти) */
+.tct__count { display: inline-flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 12.5px; }
+.tct__count svg { color: var(--text-faint); }
+
 /* кольоровий тег змапованої задачі (тінт --proj); закрита задача — тьмяна */
 .tct__tag {
   display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 280px; padding: 3px 9px 3px 7px;

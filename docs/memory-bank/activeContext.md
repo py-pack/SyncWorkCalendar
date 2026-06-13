@@ -8,6 +8,36 @@
 2 нові capability злиті в `openspec/specs/` і канонічні: `api-calendar`,
 `frontend-calendar`. Лишився лише git-commit.
 
+## Заархівована зміна: `rework-jira-projects-subview` (2026-06-14)
+
+**Реалізовано і заархівовано 2026-06-14 (11/12 задач; 5.2 — браузерний QA —
+лишився на живу перевірку). `validate --strict` — OK; `npm run build` — чисто.
+Дельта злита в `openspec/specs/frontend-data-tables/` (MODIFIED «Екран «Проекти»»
++ ADDED «Попап налаштувань синку Jira-проекту»).** Тека —
+[`archive/2026-06-13-rework-jira-projects-subview/`](../../openspec/changes/archive/2026-06-13-rework-jira-projects-subview/).
+Дзеркало TimeCamp-рішень `rework-projects-screen` на під-вʼюху **«Проекти → Jira»**
+(`/projects/jira`), **фронтенд-онлі**: (1) **фільтр** за станом синку `усі | у
+синку | не в синку` за `is_watched` (клієнтський, без re-fetch); (2) **швидкий
+пошук** по локальних даних (`key`/`name`); (3) **попап редагування** замість
+інлайн-тогла (шестерня / подвійний клік) — **простіший за TimeCamp: лише тогл
+`is_watched`**, без select-а задачі, **Save завжди дозволено** (Jira-проект не
+мапиться на задачу); (4) архівні — тьмяні; (5) `issues_count` лишається, рахує
+**всі** задачі. **Без дерева/кольору/тега** (Jira-проекти плоскі — нема
+`parent_id`/`color`/маппінгу). Бекенд НЕ чіпаємо (`GET /jr-projects` уже віддає
+все; `PATCH /jr-projects/{id}` приймає `is_watched`). MODIFIED capability
+`frontend-data-tables` (Jira-частина «Екран «Проекти»» + нова вимога «Попап
+налаштувань синку Jira-проекту»). Рішення — `design.md` (D1–D5).
+
+**Реалізація (frontend, `front/`):** `stores/tables.ts` (новий `jrActive`
+фільтр-стан; `toggleJrWatched` → `saveJrWatched(id, is_watched)`); нова
+`components/projects/JrSyncSettingsModal.vue` (Sheet-попап з **одним тоглом**,
+Save завжди дозволено); переписано `views/projects/JrProjects.vue` — плоский
+список (переюз `.tct*`-стилів, без дерева/кольору) з тулбаром (фільтр + пошук),
+індикатором стану синку, шестернею, подвійним кліком, тьмяними архівними,
+лічильником задач (новий `.tct__count`). i18n — **усі ключі переюзані**, нових
+рядків не треба. Бекенд не зачіпався. `npm run build` чисто. Лишилось:
+браузерний QA (5.2) + git-commit.
+
 ## Заархівована зміна: `add-page-shell-template` (2026-06-13)
 
 **Реалізовано і заархівовано 2026-06-13 (12/13 задач; 4.2 — браузерний QA —

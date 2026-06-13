@@ -38,6 +38,7 @@ export const useTablesStore = defineStore('tables', () => {
   // Jira
   const jrProjects = ref<JRProject[]>([])
   const jrProjectsLoaded = ref(false)
+  const jrActive = ref<'active' | 'inactive' | 'all'>('all')
   const jrIssues = ref<JRIssue[]>([])
   // Tempo / worklog sync tasks
   const wst = ref<WorklogSyncTask[]>([])
@@ -130,8 +131,10 @@ export const useTablesStore = defineStore('tables', () => {
     return api.jrIssues({ q, limit: 10 })
   }
 
-  async function toggleJrWatched(p: JRProject): Promise<void> {
-    const updated = await api.patchJrProject(p.id, { is_watched: !p.is_watched })
+  /** Зберегти стан синку (`is_watched`) Jira-проекту з попапа (PATCH + локальне
+   *  оновлення рядка). */
+  async function saveJrWatched(id: number, is_watched: boolean): Promise<void> {
+    const updated = await api.patchJrProject(id, { is_watched })
     jrProjects.value = jrProjects.value.map((x) => (x.id === updated.id ? updated : x))
   }
 
@@ -221,6 +224,7 @@ export const useTablesStore = defineStore('tables', () => {
     tcUntracked,
     jrProjects,
     jrProjectsLoaded,
+    jrActive,
     jrIssues,
     wst,
     wstSummary,
@@ -232,7 +236,7 @@ export const useTablesStore = defineStore('tables', () => {
     loadTempo,
     saveTcSync,
     jrIssueSearch,
-    toggleJrWatched,
+    saveJrWatched,
     syncProjects,
     autoSyncEntries,
     autoSyncIssues,

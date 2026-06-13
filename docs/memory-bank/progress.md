@@ -22,6 +22,18 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`rework-jira-projects-subview`](../../openspec/changes/archive/2026-06-13-rework-jira-projects-subview/)
+  — **заархівовано 2026-06-14 (11/12; браузерний QA 5.2 — наживо; git-commit).
+  Дельта злита в `openspec/specs/frontend-data-tables/` (MODIFIED «Екран
+  «Проекти»» + ADDED «Попап налаштувань синку Jira-проекту»). `validate --strict`
+  OK, `npm run build` чисто.**
+  Дзеркало TimeCamp-рішень на під-вʼюху «Проекти → Jira» (фронтенд-онлі): фільтр
+  за станом синку (`is_watched`, клієнтський) + швидкий локальний пошук
+  (`key`/`name`) + попап редагування замість інлайн-тогла (**простіший: лише
+  тогл `is_watched`, Save завжди дозволено**) + тьмяні архівні; `issues_count`
+  рахує всі задачі. Без дерева/кольору/тега (Jira-проекти плоскі). Бекенд не
+  чіпається. MODIFIED `frontend-data-tables`. Рішення — `design.md` (D1–D5).
+
 - [`add-page-shell-template`](../../openspec/changes/archive/2026-06-13-add-page-shell-template/)
   — **заархівовано 2026-06-13 (12/13; браузерний QA 4.2 — наживо; git-commit).
   Нова capability `frontend-page-shell` (3 вимоги) злита в `openspec/specs/` і

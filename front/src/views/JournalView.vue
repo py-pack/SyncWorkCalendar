@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import DataPage from '@/components/data/DataPage.vue'
 import DataTable from '@/components/data/DataTable.vue'
-import PageHeader from '@/components/data/PageHeader.vue'
 import StatusBadge from '@/components/data/StatusBadge.vue'
 import SyncBtn from '@/components/data/SyncBtn.vue'
 import type { Column } from '@/components/data/types'
@@ -42,31 +42,28 @@ onMounted(() => void store.load())
 </script>
 
 <template>
-  <div class="page">
-    <PageHeader :title="t.jr_journal_title" :desc="t.jr_journal_desc">
-      <template #actions>
-        <SyncBtn :label="t.tbl_refresh" icon="sync" :action="() => store.load()" />
-      </template>
-    </PageHeader>
+  <DataPage :title="t.jr_journal_title" :desc="t.jr_journal_desc" :error="store.error">
+    <template #actions>
+      <SyncBtn :label="t.tbl_refresh" icon="sync" :action="() => store.load()" />
+    </template>
 
-    <div class="pipe">
-      <div class="cal__chips">
-        <button
-          v-for="f in filters"
-          :key="f.id"
-          type="button"
-          :class="['chip', { 'is-on': store.filter === f.id }]"
-          @click="store.setFilter(f.id)"
-        >
-          {{ f.label }}
-        </button>
+    <template #toolbar>
+      <div class="pipe">
+        <div class="cal__chips">
+          <button
+            v-for="f in filters"
+            :key="f.id"
+            type="button"
+            :class="['chip', { 'is-on': store.filter === f.id }]"
+            @click="store.setFilter(f.id)"
+          >
+            {{ f.label }}
+          </button>
+        </div>
       </div>
-    </div>
+    </template>
 
-    <p v-if="store.error" class="data-error"><Icon name="alert" :size="15" />{{ store.error }}</p>
-
-    <div class="page__body">
-      <DataTable
+    <DataTable
         :columns="cols"
         :rows="store.jobs"
         :get-id="(r) => r.id"
@@ -98,7 +95,6 @@ onMounted(() => void store.load())
           <Icon v-else name="chevR" :size="16" />
         </template>
       </DataTable>
-    </div>
 
     <Sheet
       :open="!!store.detail"
@@ -147,5 +143,5 @@ onMounted(() => void store.load())
         </div>
       </div>
     </Sheet>
-  </div>
+  </DataPage>
 </template>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
+import DataPage from '@/components/data/DataPage.vue'
 import DataTable from '@/components/data/DataTable.vue'
-import PageHeader from '@/components/data/PageHeader.vue'
 import type { Column } from '@/components/data/types'
 import Avatar from '@/components/ui/Avatar.vue'
 import Btn from '@/components/ui/Btn.vue'
@@ -120,17 +120,12 @@ onMounted(() => void store.load())
 </script>
 
 <template>
-  <div class="page">
-    <PageHeader :title="t.users_title" :desc="t.users_desc">
-      <template #actions>
-        <Btn size="sm" variant="primary" icon="plus" @click="openAdd">{{ t.users_add }}</Btn>
-      </template>
-    </PageHeader>
+  <DataPage :title="t.users_title" :desc="t.users_desc" :error="store.error">
+    <template #actions>
+      <Btn size="sm" variant="primary" icon="plus" @click="openAdd">{{ t.users_add }}</Btn>
+    </template>
 
-    <p v-if="store.error" class="data-error"><Icon name="alert" :size="15" />{{ store.error }}</p>
-
-    <div class="page__body">
-      <DataTable :columns="cols" :rows="store.users" :get-id="(r) => r.id" :empty="t.empty">
+    <DataTable :columns="cols" :rows="store.users" :get-id="(r) => r.id" :empty="t.empty">
         <template #cell-name="{ row }">
           <div class="dt-name">
             <Avatar :initials="initials(row.username)" :hue="hueFor(row.username)" :size="30" />
@@ -165,7 +160,6 @@ onMounted(() => void store.load())
           </span>
         </template>
       </DataTable>
-    </div>
 
     <Sheet :open="formOpen" :title="formTitle" :width="400" @close="closeForm">
       <div class="userform">
@@ -208,5 +202,5 @@ onMounted(() => void store.load())
         </div>
       </div>
     </Sheet>
-  </div>
+  </DataPage>
 </template>

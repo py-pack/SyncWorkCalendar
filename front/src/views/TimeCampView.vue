@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import DataPage from '@/components/data/DataPage.vue'
 import DataTable from '@/components/data/DataTable.vue'
-import PageHeader from '@/components/data/PageHeader.vue'
 import type { Column } from '@/components/data/types'
 import Btn from '@/components/ui/Btn.vue'
-import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from '@/i18n'
 import { durationMin, fmtDur } from '@/lib/format'
 import { useTablesStore } from '@/stores/tables'
@@ -29,27 +28,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
-    <PageHeader :title="t.tc_title" :desc="t.tc_desc" />
-
-    <p v-if="store.error" class="data-error"><Icon name="alert" :size="15" />{{ store.error }}</p>
-
-    <div class="page__body">
-      <DataTable
-        :columns="cols"
-        :rows="store.tcUntracked"
-        :get-id="(r) => r.id"
-        :empty="t.empty"
-      >
-        <template #cell-description="{ row }">
-          <span class="mono">{{ row.description }}</span>
-        </template>
-        <template #cell-start_at="{ row }">{{ row.start_at.slice(5, 10) }}</template>
-        <template #cell-dur="{ row }">{{ fmtDur(durationMin(row.start_at, row.end_at)) }}</template>
-        <template #cell-act>
-          <Btn size="sm" variant="ghost" icon="link" disabled>{{ t.tc_match }}</Btn>
-        </template>
-      </DataTable>
-    </div>
-  </div>
+  <DataPage :title="t.tc_title" :desc="t.tc_desc" :error="store.error">
+    <DataTable
+      :columns="cols"
+      :rows="store.tcUntracked"
+      :get-id="(r) => r.id"
+      :empty="t.empty"
+    >
+      <template #cell-description="{ row }">
+        <span class="mono">{{ row.description }}</span>
+      </template>
+      <template #cell-start_at="{ row }">{{ row.start_at.slice(5, 10) }}</template>
+      <template #cell-dur="{ row }">{{ fmtDur(durationMin(row.start_at, row.end_at)) }}</template>
+      <template #cell-act>
+        <Btn size="sm" variant="ghost" icon="link" disabled>{{ t.tc_match }}</Btn>
+      </template>
+    </DataTable>
+  </DataPage>
 </template>

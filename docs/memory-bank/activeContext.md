@@ -8,12 +8,43 @@
 2 нові capability злиті в `openspec/specs/` і канонічні: `api-calendar`,
 `frontend-calendar`. Лишився лише git-commit.
 
-## Активна зміна (реалізовано, не заархівовано): `rework-projects-screen` (2026-06-13)
+## Заархівована зміна: `add-page-shell-template` (2026-06-13)
 
-**Реалізовано 2026-06-13 (27/27 код-задач; лишився браузерний QA — секція 11.2
-— наживо, і git-commit). `validate --strict` — OK; `npm run build` і
-бекенд-контракт (OpenAPI) — чисті.** Тека —
-[`changes/rework-projects-screen/`](../../openspec/changes/rework-projects-screen/).
+**Реалізовано і заархівовано 2026-06-13 (12/13 задач; 4.2 — браузерний QA —
+лишився на живу перевірку). `validate --strict` — OK; `npm run build`
+(`vue-tsc`+`vite`) — чисто. Нова capability `frontend-page-shell` (3 вимоги)
+злита в `openspec/specs/` і канонічна.** Тека —
+[`archive/2026-06-13-add-page-shell-template/`](../../openspec/changes/archive/2026-06-13-add-page-shell-template/).
+Винесено **єдиний переюзовний каркас сторінки** `components/data/DataPage.vue`
+для всіх дані-/табличних екранів (раніше кожна в'юха копіпастила `.page` →
+`PageHeader` → опц. суб-бар → банер `data-error` → `.page__body`). `DataPage`
+інкапсулює це: props `title`(req)/`desc?`/`error?` + **закладки** (`tabs`/
+`activeTab` + `update:activeTab`, окремі під-сторінки, **router-agnostic** —
+навігацію робить в'юха, як Projects TimeCamp/Jira), слоти `#actions` (верхній
+правий кут), `#toolbar` (опц. суб-бар), default (тіло в `.page__body`); банер
+помилки — авто за prop `error`. Порядок: заголовок → закладки → тулбар → банер →
+тіло.
+
+**Реалізація:** новий `components/data/DataPage.vue` (поглинув `PageHeader` +
+банер помилки + рендер `Tabs`); 6 в'юх переведено на нього (`ProjectsView` —
+показовий приклад закладок через `:tabs`/`v-model:active-tab`; `TimeCampView`/
+`JiraView` — без actions/toolbar; `TempoView` — `#toolbar`=`.pipe`; `JournalView`
+— `#toolbar`=chips + `Sheet` у тілі; `UsersView` — `#actions`=додати + `Sheet`-
+форма в тілі); `PageHeader.vue` **видалено** (0 зовнішніх споживачів). Стилі —
+наявні `.page*`/`data-error` (без нових CSS). `CalendarView` (власний `.cal`-
+layout) — поза скоупом (інший клас екрана, D5). Нова canonical-capability
+`frontend-page-shell`. Рішення — `design.md` (D1–D7). Лишилось: браузерний QA +
+git-commit. Мета — далі **постійно** перевикористовувати каркас для нових таблиць.
+
+## Заархівована зміна: `rework-projects-screen` (2026-06-13)
+
+**Реалізовано і заархівовано 2026-06-13 (26/27 задач; 11.2 — браузерний QA —
+лишився на живу перевірку; git-commit). `validate --strict` — OK; `npm run
+build` і бекенд-контракт (OpenAPI) — чисті. 3 capability-дельти злиті в
+`openspec/specs/` і канонічні: MODIFIED `api-jira-read` (пошук `q`/`limit` +
+`active`), ADDED у `api-tc-projects-management` (GET-дерево + фільтр архіву),
+MODIFIED+ADDED `frontend-data-tables` (екран «Проекти» + попап синку).** Тека —
+[`archive/2026-06-13-rework-projects-screen/`](../../openspec/changes/archive/2026-06-13-rework-projects-screen/).
 Переробка під-вʼюхи **«Проекти → TimeCamp»**: відкриття екрана робило **6 запитів**
 (2 GET даних + 2 POST авто-синку + 2 GET reload) — авто-синк прибрано повністю,
 а дані вантажить **кожна під-вʼюха сама** (TimeCamp → лише `GET /tc-projects`;
@@ -58,8 +89,8 @@ Jira-проекти — лише при переході на вкладку Jir
   `active`-param лишився як опційна можливість API, UI його не використовує);
   (2) додано **швидке поле пошуку** по локальних даних (`name`/`issue_key`/
   `issue_name`); (3) тег задачі перенесено **одразу до назви** проекту;
-  (4) кнопка синку запускає **кожен сервіс незалежно** (`allSettled`). `npm run
-  build` лишається чистим.
+  (4) кнопка синку синкає **лише сервіс активної під-вʼюхи** (TimeCamp ↔ Jira,
+  деривація з `route.name`). `npm run build` лишається чистим.
 
 ## Заархівована зміна: `extract-projects-screen` (2026-06-13)
 

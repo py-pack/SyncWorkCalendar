@@ -137,22 +137,21 @@ export const useTablesStore = defineStore('tables', () => {
 
   // ---- явний синк проектів (кнопка в шапці «Проектів», ніколи не авто, D9) ----
 
-  /** Синк проектів для КОЖНОГО сервісу незалежно (TimeCamp + Jira), потім reload
-   *  завантажених джерел. `allSettled` — щоб збій одного сервісу не блокував інший. */
-  async function syncProjects(): Promise<void> {
+  /** Синк проектів ОДНОГО сервісу (відповідного активній під-вʼюсі) + reload
+   *  саме цього джерела. Кнопка синку синкає лише той сервіс, що зараз видно. */
+  async function syncProjects(service: 'tc' | 'jr'): Promise<void> {
     error.value = null
-    const results = await Promise.allSettled([api.syncTcProjects(), api.syncJrProjects()])
-
-    const tasks: Promise<void>[] = []
-    if (tcProjectsLoaded.value) tasks.push(loadTcProjects({ force: true }))
-    if (jrProjectsLoaded.value) tasks.push(loadJrProjects({ force: true }))
-    await Promise.all(tasks)
-
-    const failed = results.find((r) => r.status === 'rejected')
-    if (failed) {
-      const reason = (failed as PromiseRejectedResult).reason
-      error.value = errMsg(reason)
-      throw reason // щоб кнопка синку показала помилку, а не «done»
+    try {
+      if (service === 'jr') {
+        await api.syncJrProjects()
+        await loadJrProjects({ force: true })
+      } else {
+        await api.syncTcProjects()
+        await loadTcProjects({ force: true })
+      }
+    } catch (e) {
+      error.value = errMsg(e)
+      throw e // щоб кнопка синку показала помилку, а не «done»
     }
   }
 

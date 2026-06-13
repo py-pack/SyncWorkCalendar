@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import DataPage from '@/components/data/DataPage.vue'
 import DataTable from '@/components/data/DataTable.vue'
-import PageHeader from '@/components/data/PageHeader.vue'
 import StatusBadge from '@/components/data/StatusBadge.vue'
 import SyncBtn from '@/components/data/SyncBtn.vue'
 import type { Column } from '@/components/data/types'
 import Btn from '@/components/ui/Btn.vue'
-import Icon from '@/components/ui/Icon.vue'
 import { type WorklogStatus } from '@/api/types'
 import { useI18n } from '@/i18n'
 import { secToHm } from '@/lib/format'
@@ -50,61 +49,57 @@ onMounted(() => void store.loadTempo())
 </script>
 
 <template>
-  <div class="page">
-    <PageHeader :title="t.tempo_title" :desc="t.tempo_desc">
-      <template #actions>
-        <Btn
-          size="sm"
-          variant="primary"
-          icon="sync"
-          :disabled="sel.size === 0 || pushing"
-          @click="pushSelected"
-        >
-          {{ t.tbl_sync_selected }}{{ sel.size > 0 ? ` (${sel.size})` : '' }}
-        </Btn>
-      </template>
-    </PageHeader>
+  <DataPage :title="t.tempo_title" :desc="t.tempo_desc" :error="store.error">
+    <template #actions>
+      <Btn
+        size="sm"
+        variant="primary"
+        icon="sync"
+        :disabled="sel.size === 0 || pushing"
+        @click="pushSelected"
+      >
+        {{ t.tbl_sync_selected }}{{ sel.size > 0 ? ` (${sel.size})` : '' }}
+      </Btn>
+    </template>
 
-    <div class="pipe">
-      <div class="pipe__summary">
-        <div v-for="s in SUMMARY_STATES" :key="s" class="pipe__stat">
-          <StatusBadge :status="s" />
-          <b class="mono">{{ summaryCount(s) }}</b>
+    <template #toolbar>
+      <div class="pipe">
+        <div class="pipe__summary">
+          <div v-for="s in SUMMARY_STATES" :key="s" class="pipe__stat">
+            <StatusBadge :status="s" />
+            <b class="mono">{{ summaryCount(s) }}</b>
+          </div>
+        </div>
+        <span class="spacer" />
+        <div class="pipe__steps">
+          <span class="pipe__label mono">pre_create → create → created</span>
+          <SyncBtn label="prepare" icon="bolt" :action="() => store.syncWstPrepare()" />
+          <SyncBtn label="resolve-issues" icon="bolt" :action="() => store.syncWstResolve()" />
+          <SyncBtn label="push-to-tempo" icon="bolt" :action="() => store.syncWstPush()" />
         </div>
       </div>
-      <span class="spacer" />
-      <div class="pipe__steps">
-        <span class="pipe__label mono">pre_create → create → created</span>
-        <SyncBtn label="prepare" icon="bolt" :action="() => store.syncWstPrepare()" />
-        <SyncBtn label="resolve-issues" icon="bolt" :action="() => store.syncWstResolve()" />
-        <SyncBtn label="push-to-tempo" icon="bolt" :action="() => store.syncWstPush()" />
-      </div>
-    </div>
+    </template>
 
-    <p v-if="store.error" class="data-error"><Icon name="alert" :size="15" />{{ store.error }}</p>
-
-    <div class="page__body">
-      <DataTable
-        v-model:selected="sel"
-        :columns="cols"
-        :rows="store.wst"
-        :get-id="(r) => r.id"
-        selectable
-        :empty="t.empty"
-      >
-        <template #cell-issue_key="{ row }">
-          <span class="mono key-pill">{{ row.issue_key }}</span>
-        </template>
-        <template #cell-started_at="{ row }">{{ row.started_at.slice(5, 10) }}</template>
-        <template #cell-time_spent="{ row }">{{ secToHm(row.time_spent) }}</template>
-        <template #cell-status="{ row }">
-          <StatusBadge :status="row.status" />
-        </template>
-        <template #cell-target_id="{ row }">
-          <span v-if="row.target_id">#{{ row.target_id }}</span>
-          <span v-else class="faint">—</span>
-        </template>
-      </DataTable>
-    </div>
-  </div>
+    <DataTable
+      v-model:selected="sel"
+      :columns="cols"
+      :rows="store.wst"
+      :get-id="(r) => r.id"
+      selectable
+      :empty="t.empty"
+    >
+      <template #cell-issue_key="{ row }">
+        <span class="mono key-pill">{{ row.issue_key }}</span>
+      </template>
+      <template #cell-started_at="{ row }">{{ row.started_at.slice(5, 10) }}</template>
+      <template #cell-time_spent="{ row }">{{ secToHm(row.time_spent) }}</template>
+      <template #cell-status="{ row }">
+        <StatusBadge :status="row.status" />
+      </template>
+      <template #cell-target_id="{ row }">
+        <span v-if="row.target_id">#{{ row.target_id }}</span>
+        <span v-else class="faint">—</span>
+      </template>
+    </DataTable>
+  </DataPage>
 </template>

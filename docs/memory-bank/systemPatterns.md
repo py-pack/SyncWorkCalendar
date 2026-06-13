@@ -126,6 +126,20 @@ running → failed                            (exception path)
 - `naming_convention` для констрейнтів задається в `DatabaseConfig` і прокидається
   в `Base.metadata`, щоб міграції генерувались зі стабільними іменами.
 
+## Каркас дані-екранів (frontend)
+
+Усі дані-/табличні екрани (`front/src/views/`) будуються на **єдиному каркасі**
+`components/data/DataPage.vue` (зміна `add-page-shell-template`) — не копіпастять
+`.page`-обгортку руками. `DataPage` дає: заголовок (`title`+опц.`desc`), дії у
+верхньому правому куті (слот `#actions`), **закладки** (окремі під-сторінки —
+props `tabs`/`activeTab` + подія `update:activeTab`; **router-agnostic**:
+навігацію робить в'юха, як `ProjectsView`), опційний суб-бар (слот `#toolbar` —
+`pipe`/chips/фільтри), авто-банер помилки (prop `error`) і тіло (default-слот у
+`.page__body`). Порядок: заголовок → закладки → тулбар → банер → тіло. CSS —
+наявні класи `.page*`/`.data-error` (`styles/shell.css`). **Новий табличний
+екран = `DataPage` + вміст.** Виняток — `CalendarView` (власний `.cal`-grid, не
+таблиця).
+
 ## Деталізовані описи інтеграцій
 
 - [TimeCamp](../technical/integrations/timecamp.md) — клієнт, DTO, моделі, DAO,

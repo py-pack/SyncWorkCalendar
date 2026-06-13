@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import DataPage from '@/components/data/DataPage.vue'
 import DataTable from '@/components/data/DataTable.vue'
-import PageHeader from '@/components/data/PageHeader.vue'
 import ProjTag from '@/components/data/ProjTag.vue'
 import type { Column } from '@/components/data/types'
 import Badge from '@/components/ui/Badge.vue'
-import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from '@/i18n'
 import { useTablesStore } from '@/stores/tables'
 
@@ -45,28 +44,22 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page">
-    <PageHeader :title="t.jr_title" :desc="t.jr_desc" />
-
-    <p v-if="store.error" class="data-error"><Icon name="alert" :size="15" />{{ store.error }}</p>
-
-    <div class="page__body">
-      <DataTable
-        :columns="cols"
-        :rows="store.jrIssues"
-        :get-id="(r) => r.id"
-        :empty="t.empty"
-      >
-        <template #cell-key="{ row }">
-          <span class="mono key-pill">{{ row.key }}</span>
-        </template>
-        <template #cell-project="{ row }">
-          <ProjTag :label="projKeyById[row.jr_project_id] ?? String(row.jr_project_id)" />
-        </template>
-        <template #cell-status="{ row }">
-          <Badge :tone="statusTone(row.status)" soft dot>{{ row.status }}</Badge>
-        </template>
-      </DataTable>
-    </div>
-  </div>
+  <DataPage :title="t.jr_title" :desc="t.jr_desc" :error="store.error">
+    <DataTable
+      :columns="cols"
+      :rows="store.jrIssues"
+      :get-id="(r) => r.id"
+      :empty="t.empty"
+    >
+      <template #cell-key="{ row }">
+        <span class="mono key-pill">{{ row.key }}</span>
+      </template>
+      <template #cell-project="{ row }">
+        <ProjTag :label="projKeyById[row.jr_project_id] ?? String(row.jr_project_id)" />
+      </template>
+      <template #cell-status="{ row }">
+        <Badge :tone="statusTone(row.status)" soft dot>{{ row.status }}</Badge>
+      </template>
+    </DataTable>
+  </DataPage>
 </template>

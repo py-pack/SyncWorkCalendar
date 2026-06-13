@@ -22,10 +22,23 @@
 
 ## Що в роботі (OpenSpec)
 
-- [`rework-projects-screen`](../../openspec/changes/rework-projects-screen/) —
-  **реалізовано 2026-06-13 (27/27 код-задач; браузерний QA 11.2 — наживо;
-  git-commit). `validate --strict` OK, `npm run build` і бекенд-OpenAPI —
-  чисті.** Переробка під-вʼюхи «Проекти → TimeCamp»: прибрано авто-синк + лінива
+- [`add-page-shell-template`](../../openspec/changes/archive/2026-06-13-add-page-shell-template/)
+  — **заархівовано 2026-06-13 (12/13; браузерний QA 4.2 — наживо; git-commit).
+  Нова capability `frontend-page-shell` (3 вимоги) злита в `openspec/specs/` і
+  канонічна. `validate --strict` OK, `npm run build` чисто.** Винесено
+  переюзовний каркас сторінки `components/data/DataPage.vue` (заголовок + дії у
+  верхньому правому куті + **закладки/окремі під-сторінки** (router-agnostic) +
+  опційний тулбар + банер помилки + тіло); 6 в'юх переведено на нього,
+  `PageHeader.vue` видалено (0 споживачів). Фронтенд-онлі, без зміни
+  поведінки/бекенду/CSS. `CalendarView` — поза скоупом (інший клас екрана).
+  Рішення — `design.md` (D1–D7).
+
+- [`rework-projects-screen`](../../openspec/changes/archive/2026-06-13-rework-projects-screen/)
+  — **заархівовано 2026-06-13 (26/27; браузерний QA 11.2 — наживо; git-commit).
+  3 capability-дельти злиті в `openspec/specs/` і канонічні: `api-jira-read`,
+  `api-tc-projects-management`, `frontend-data-tables`. `validate --strict` OK,
+  `npm run build` і бекенд-OpenAPI — чисті.** Переробка під-вʼюхи
+  «Проекти → TimeCamp»: прибрано авто-синк + лінива
   загрузка по під-вʼюхах (одна сторінка = один запит, Jira-проекти лише при
   переході на вкладку Jira; 6→1 запит), дерево за `parent_id` + кольори
   (`color`), архівні тьмяні, попап налаштувань синку (тогл + select задачі з
@@ -42,7 +55,7 @@
   `api-tc-projects-management`, `api-jira-read`, `frontend-data-tables`. Рішення
   — `decisinLog.md` → D-017. **Уточнення за фідбеком:** фільтр — за `is_sync`
   (клієнтський, не `is_archived`), + швидке поле пошуку по локальних даних, тег
-  задачі біля назви, кнопка синку — кожен сервіс незалежно (`allSettled`).
+  задачі біля назви, кнопка синку — лише сервіс активної під-вʼюхи.
 - [`extract-projects-screen`](../../openspec/changes/archive/2026-06-13-extract-projects-screen/)
   — **заархівовано 2026-06-13 (17/20; секції 5.2–5.4 — браузерний QA — на живу
   перевірку). 3 capability-дельти злиті в `openspec/specs/` і канонічні:

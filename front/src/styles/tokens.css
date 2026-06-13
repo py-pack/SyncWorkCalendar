@@ -1,0 +1,39 @@
+/* =========================================================================
+   Sync Work — design tokens (перенесено з прототипу docs/design/project)
+   Технічний / мінімалістичний · світла + темна · акцент синій.
+   Значення --accent* перезаписуються в рантаймі зі stores/ui (палітра акценту).
+   ========================================================================= */
+:root {
+  --accent: #2a6fdb;
+  --accent-press: #245fbd;
+  --accent-soft: #e9f0fc;
+  --accent-ink: #1b4fa0;
+
+  --bg: #fafafa;
+  --canvas: #f4f4f5;
+  --surface: #ffffff;
+  --surface-2: #fafafa;
+  --raise: #ffffff;
+  --border: #e7e7ea;
+  --border-strong: #d8d8dc;
+  --hair: #efeff1;
+  --text: #18181b;
+  --text-2: #52525b;
+  --text-3: #8a8a93;
+  --text-faint: #b4b4bb;
+
+  --green: #1f9a5b; --green-soft: #e7f6ed;
+  --amber: #c2820a; --amber-soft: #fbf2dc;
+  --red: #d64545; --red-soft: #fbe9e9;
+  --violet: #6b53d6;
+
+  --shadow-sm: 0 1px 2px rgba(20,20,30,.06), 0 1px 1px rgba(20,20,30,.04);
+  --shadow-md: 0 4px 12px rgba(20,20,30,.08), 0 1px 3px rgba(20,20,30,.06);
+  --shadow-lg: 0 14px 40px rgba(20,20,30,.16), 0 4px 12px rgba(20,20,30,.08);
+  --shadow-pop: 0 8px 28px rgba(20,20,30,.14), 0 2px 6px rgba(20,20,30,.08);
+
+  --r-xs: 5px; --r-sm: 7px; --r-md: 9px; --r-lg: 12px; --r-xl: 16px;
+  --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --nav-w: 224px;
+}

@@ -58,6 +58,20 @@ class APIConfig(BaseModel):
     jwt_secret: str = ""
     jwt_ttl_hours: int = 24
     cors_origins: Annotated[list[str], NoDecode] = ["*"]
+    # Google-вхід (capability `api-google-auth`). client_id — публічний
+    # (його ж віддаємо фронту як VITE_GOOGLE_CLIENT_ID); secret — лише на беку,
+    # потрібен для обміну auth-`code` (popup-флоу). Порожній client_id =
+    # Google-вхід вимкнено (endpoint віддає 503), логін/пароль працює.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # Префікс монтування за реверс-проксі (FastAPI root_path). nginx віддає API
+    # під /api/ і зрізає префікс (trailing-slash proxy_pass), тож бекенд бачить
+    # шляхи без /api. Без root_path сторінка /docs зашиває openapi_url=/openapi.json
+    # (корене-відносний) → браузер стукає на https://<host>/openapi.json, що йде
+    # на фронт і ламає Swagger. root_path="/api" → docs посилається на
+    # /api/openapi.json і servers у спеці теж під /api. Порожній = пряме звернення
+    # до порту без проксі (наприклад localhost:10331/docs).
+    root_path: str = ""
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -91,7 +105,7 @@ class Settings(BaseSettings):
     tc: TimeCampConfig = TimeCampConfig()
     jira: JiraConfig = JiraConfig()
     api: APIConfig = APIConfig()
-    current_user: str = ''
+    current_user: str = ""
 
     @model_validator(mode="after")
     def _require_jwt_secret_when_api_used(self) -> "Settings":

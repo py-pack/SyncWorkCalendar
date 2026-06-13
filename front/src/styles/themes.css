@@ -1,0 +1,44 @@
+/* =========================================================================
+   Sync Work — тема (темна) + щільність (compact/regular)
+   Перемикач теми — атрибут data-theme на <html> (керує stores/ui).
+   ========================================================================= */
+[data-theme="dark"] {
+  --accent: #5a92e8;
+  --accent-press: #6c9eed;
+  --accent-soft: #1a2740;
+  --accent-ink: #aecbf6;
+
+  --bg: #0c0c0e;
+  --canvas: #100f12;
+  --surface: #161619;
+  --surface-2: #1b1b1f;
+  --raise: #1d1d22;
+  --border: #2a2a30;
+  --border-strong: #36363d;
+  --hair: #222227;
+  --text: #f3f3f5;
+  --text-2: #b6b6be;
+  --text-3: #85858f;
+  --text-faint: #5c5c66;
+
+  --green: #46c485; --green-soft: #142b1f;
+  --amber: #e0ad4e; --amber-soft: #2e2616;
+  --red: #ef6b6b; --red-soft: #2e1818;
+  --violet: #9c8cf0;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 4px 14px rgba(0,0,0,.5);
+  --shadow-lg: 0 18px 48px rgba(0,0,0,.6);
+  --shadow-pop: 0 10px 30px rgba(0,0,0,.55);
+}
+
+/* щільність: керується класом dens-* на оболонці (stores/ui.density) */
+.dens-compact .dt tbody td { padding: 7px 14px; }
+.dens-compact .nav__item { padding: 6px 9px; }
+.dens-compact .page__body { padding: 12px 18px 32px; }
+.dens-compact .page__head { padding: 13px 24px 12px; }
+
+/* перемикачі календаря (екран — фаза 2; класи лишаються для сумісності) */
+.no-workband .cal-work { display: none; }
+.no-weekends .cal__grid { grid-template-columns: 56px repeat(5, minmax(118px, 1fr)); }
+.no-weekends .cal-col:nth-child(7), .no-weekends .cal-col:nth-child(8) { display: none; }

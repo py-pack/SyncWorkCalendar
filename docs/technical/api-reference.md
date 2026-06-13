@@ -74,6 +74,40 @@ client                                  api
 
 JWT claims: `sub` (username), `user_id`, `worker_key`, `iat`, `exp`.
 
+### Google-вхід (`POST /auth/google`)
+
+Альтернативний спосіб довести особу — Google. Видає **той самий** JWT, що й
+логін/пароль (ті самі claims); решта сесії однакова. Реєстрації немає —
+лише зіставлення з наявним `api_users` за e-mail.
+
+```
+client                                   api
+  │  POST /auth/google {credential|code}   │
+  │ ─────────────────────────────────────▶ │  верифікація в Google (google-auth):
+  │                                         │   підпис JWKS, aud==GOOGLE_CLIENT_ID, iss, exp,
+  │                                         │   email_verified; для {code} — обмін у Google
+  │                                         │  get_by_email(lower-case, тільки is_active)
+  │  200 {access_token, expires_in}         │
+  │ ◀───────────────────────────────────── │
+```
+
+- Тіло — **рівно одне** з полів: `{credential}` (Google **ID-token**: One Tap /
+  GIS credential-режим) або `{code}` (auth-**code** з popup-флоу). Обидва поля
+  або жодного → `422`.
+- `{code}` бекенд обмінює в Google на токени (`redirect_uri=postmessage`,
+  потрібен `GOOGLE_CLIENT_SECRET`) і далі верифікує отриманий ID-token.
+- Невідомий/неактивний e-mail **або** будь-яка невдача верифікації →
+  `401 {detail: "account not found"}` (однакова відповідь, без розрізнення).
+  Рядок в `api_users` не створюється.
+- `GOOGLE_CLIENT_ID` порожній → `503 "google sign-in is not configured"`
+  (не `500`). `{code}` без `GOOGLE_CLIENT_SECRET` →
+  `503 "google code flow is not configured"`. Логін/пароль працює незалежно.
+- Конфіг (backend-env): `APP__API__GOOGLE_CLIENT_ID` (публічний, його ж віддаємо
+  фронту як `VITE_GOOGLE_CLIENT_ID`), `APP__API__GOOGLE_CLIENT_SECRET` (лише на
+  беку). Authorized JS origin фронта для GIS/One Tap — `https://sync.dev`.
+- Передумова: у відповідного `api_users` має бути заповнений `email` (UNIQUE,
+  nullable). Поки немає Users CRUD — через CLI/ручний `UPDATE`.
+
 ## 4. `api_jobs` lifecycle
 
 Кожен `POST /sync/**` створює рядок у `api_jobs`. State machine:
@@ -110,6 +144,7 @@ running ──success──▶ needs_verification ──POST /api-jobs/{id}/veri
 ### Public
 - `GET /healthz`
 - `POST /auth/login`
+- `POST /auth/google` (Google credential/code; `503` якщо не налаштований)
 - `POST /auth/refresh` (приймає Bearer)
 - `GET /docs`, `/redoc`, `/openapi.json`
 

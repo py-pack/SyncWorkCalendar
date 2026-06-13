@@ -58,9 +58,20 @@ docker compose up           # api (uvicorn --reload) + front (vite) + db
   (`WATCHFILES_FORCE_POLLING=true`).
 - Фронт: `vite --host`, код змонтований (`./front:/app`), `node_modules` — з
   образу, файлвотчинг через polling (`VITE_USE_POLLING=true`).
-- Якщо змінив залежності — перебудуй і перествори томи:
-  `docker compose up --build` (а за потреби `docker compose down -v`, бо
-  `.venv`/`node_modules` живуть в анонімних томах і можуть застаріти).
+- **Зміна залежностей — пастка анонімних томів.** `.venv` (api) і
+  `node_modules` (front) живуть в анонімних томах (`/app/.venv`,
+  `/app/node_modules`), які **перекривають** свіжий вміст образу і **не
+  оновлюються** від простого `docker compose up --build`. Симптом: застосунок
+  падає на старті з `ModuleNotFoundError` (напр. `No module named 'google'`
+  після додавання `google-auth`), хоча залежність уже в `pyproject.toml`/
+  `uv.lock`. Лагодити одним із:
+  - швидко, без ребілду: `docker compose exec api uv sync --frozen --no-dev`
+    (front — `docker compose exec front npm ci`), далі
+    `docker compose restart <svc>`;
+  - чисто, перезалити том із образу:
+    `docker compose up -d --build --renew-anon-volumes <svc>`.
+
+  Просто `--build` **не** перезаливає анонімний том — це і є пастка.
 
 ### Варіант B — front+back на хості, db у docker (найлегший HMR)
 
@@ -100,7 +111,27 @@ VITE_HMR_HOST=sync.dev  VITE_HMR_HTTPS=true
 Внутрішні адреси (`api:10331`) браузеру не світяться. Vite-проксі (`/api` →
 `VITE_API_PROXY_TARGET`) — лише фолбек для прямого доступу `:10332` без nginx.
 
-## 7. Prod (поза скоупом)
+## 7. Google-вхід: client_id у фронт-контейнер
+
+Публічний `VITE_GOOGLE_CLIENT_ID` фронт читає лише зі своїх `front/.env*` або з
+`process.env` контейнера — **не** з кореневого `.env` (Vite дивиться в теку
+`front/`, root `.env` йому невидимий). Тому в `docker-compose.yml` змінна
+**прокидається** у front-сервіс із root `.env`:
+
+```yaml
+environment:
+  VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+```
+
+`process.env` має пріоритет над `front/.env*`, тож порожнє значення у файлі не
+заважає. Після зміни — `docker compose up -d front` (саме `up`, бо змінюється
+`environment`, а не лише код). Бек бере свій `APP__API__GOOGLE_CLIENT_ID`/
+`GOOGLE_CLIENT_SECRET` із root `.env` через `env_file`. Authorized JS origin для
+Google Console — `https://sync.dev` (без redirect URI: popup-флоу шле
+`redirect_uri=postmessage`). Деталі рішень — Memory Bank `decisinLog.md`
+→ D-013 (Google-вхід), D-014 (front HTTP-клієнт).
+
+## 8. Prod (поза скоупом)
 
 Для продакшну фронт збирається у статику (`npm run build` → `front/dist`) і
 роздається nginx-ом; dev Vite-сервер у проді не використовується. Це окрема

@@ -171,5 +171,72 @@
   `Makefile` робить `cd api && …`); фронт-команди — з `front/`. HTTP-клієнт
   фронту — на `fetch` (без `axios`), стейт — Pinia. Доменна логіка, моделі та
   схема БД не змінювалися (alembic head лишився `ef2c7288bbb0`).
-- **Джерело:** зміна `restructure-monorepo-frontend` (proposal/design/specs у
-  `openspec/changes/restructure-monorepo-frontend/`), сесія 2026-06-12.
+- **Джерело:** зміна `restructure-monorepo-frontend` (заархівована
+  2026-06-12; proposal/design/specs у
+  `openspec/changes/archive/2026-06-12-restructure-monorepo-frontend/`).
+  Host-порти продукту — `10331/10332/11331` (схема `TT AA S`, скіл
+  `preferred-docker-images`).
+
+## D-013 — Google-вхід: серверна верифікація, match-by-email, єдиний JWT
+
+- **Рішення:** додано `POST /auth/google` — альтернативний спосіб довести
+  особу через Google, що видає **той самий** наш JWT, що й логін/пароль (claims
+  `sub`, `user_id`, `worker_key`, `iat`, `exp`). Фронт шле або `{credential}`
+  (One Tap / GIS ID-token), або `{code}` (popup auth-code, бекенд обмінює в
+  Google через `redirect_uri=postmessage`). Бекенд **серверно** верифікує
+  ID-token (`google-auth`: підпис JWKS, `aud == GOOGLE_CLIENT_ID`, `iss`, `exp`,
+  `email_verified`), дістає e-mail і шукає **активного** `api_users` за `email`
+  (lower-case). Невідомий/неактивний e-mail або будь-яка невдача верифікації →
+  однакова `401 "account not found"`; **авто-реєстрації немає** (реєстрацію
+  робить адмін). Нова колонка `api_users.email` (`UNIQUE`, nullable; ревізія
+  `c03728fbb1cf`).
+- **Причина:** Google — лише ще один спосіб входу; решта застосунку
+  (auth-gate, refresh, `worker_key` для синку) уже працює на нашому JWT, тож
+  після входу сесія однакова. Клієнтському e-mail не довіряємо — підпис
+  перевіряється на беку.
+- **Обидві гілки в скоупі (не опційні):** мають працювати всі три способи
+  входу, тому `GOOGLE_CLIENT_SECRET` **обовʼязковий** для `code`-обміну і живе
+  **лише** в backend-env (не у фронт-бандлі). Порожній `GOOGLE_CLIENT_ID` →
+  `503` (Google-вхід вимкнено), `{code}` без secret → `503`; логін/пароль
+  працює незалежно.
+- **Домени/розподіл env:** фронт отримує лише публічний `VITE_GOOGLE_CLIENT_ID`;
+  authorized JS origin для One Tap/popup — `https://sync.dev` (HTTPS-вимога
+  Google); CORS для власних запитів не потрібен (один origin за host-nginx/
+  Vite-проксі).
+- **Альтернативи:** повний server-side redirect OAuth (відкинули — користувач
+  хоче popup + One Tap, фронт-центричний флоу); авто-провіжн нового юзера
+  (відкинули — суперечить «реєстрацію робить адмін»); cookie-сесія замість
+  Bearer-JWT (відкинули на цей етап).
+- **Джерело:** зміна `add-web-ui-foundation` (фаза 1 веб-UI). Capability
+  `api-google-auth` + frontend `web-auth`. Деталі — `design.md` зміни (D1–D2,
+  D8).
+
+## D-014 — Front HTTP-клієнт: authed-by-default + токен через DI-provider
+
+- **Рішення:** `front/src/api/client.ts` авторизує запити **за замовчуванням**;
+  публічні ендпоінти явно опт-аутяться `{ public: true }` (`/healthz`,
+  `/auth/login`, `/auth/google`). Токен клієнт бере не зі storage, а через
+  зареєстрований `tokenProvider()` (інверсія залежностей, як `onUnauthorized`);
+  у `main.ts` це `() => auth.token` — **жива Pinia-ref**, тобто єдине джерело
+  істини в пам'яті. Захищений запит без токена не йде на сервер (одразу
+  локальний `401` + `onUnauthorized`). Персист у `localStorage`
+  (`useStored`/`lib/storage`) лишається, але вже `flush:'sync'` і **не в
+  критичному read-шляху** — потрібен лише для відновлення сесії після reload.
+- **Причина:** початково клієнт читав токен зі storage, куди store писав його
+  асинхронно через `watch` (`flush:'pre'`). Через мікротаск-затримку
+  `login()`→одразу `fetchMe()` бачив у storage ще старе значення → `/auth/me`
+  ішов без `Authorization` → `401 "Not authenticated"`. Замість латання
+  таймінгу прибрано сам клас проблеми: read і write — один об'єкт у пам'яті,
+  гонці нема де виникнути.
+- **Чому authed-by-default:** новий ендпоінт (попереду calendar/timesheet/
+  data-screens) неможливо випадково лишити без `Authorization` — забути не
+  можна, можна лише свідомо опт-аутнути публічний.
+- **Контракт spec не змінився:** вимога `web-auth` «зберігати JWT через
+  storage-обгортку і прикладати `Authorization: Bearer` до захищених запитів»
+  лишається істинною; це суто деталь реалізації (тому правок дельта-специфікацій
+  не робили).
+- **Альтернативи:** *лише `flush:'sync'`* (відкинули — лікує симптом, не клас);
+  *прямий імпорт store у client* (відкинули — циклічна залежність; DI-хук її
+  уникає).
+- **Джерело:** сесія 2026-06-13 (баг `/auth/me` 401 після успішного login),
+  рефактор у рамках закриття `add-web-ui-foundation`.

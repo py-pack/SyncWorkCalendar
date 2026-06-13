@@ -12,11 +12,23 @@ class APIUser(Base):
 
     username: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    # E-mail для зіставлення Google-акаунта (match-by-email). UNIQUE, але
+    # nullable — старі рядки можуть бути без нього; зберігаємо у нижньому
+    # регістрі (нормалізація — на рівні DAO/сервісу).
+    email: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True
+    )
     worker_key: Mapped[str | None] = mapped_column(String, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
 
 @listens_for(APIUser, "before_insert")

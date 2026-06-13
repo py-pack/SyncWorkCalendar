@@ -1,18 +1,14 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+// Auth-gate: без валідної сесії показуємо екран входу замість оболонки,
+// незалежно від запитаного маршруту (web-app-shell / web-auth).
+import AppShell from '@/components/AppShell.vue'
+import AuthView from '@/views/AuthView.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+</script>
 
 <template>
-  <header class="app-header">
-    <nav>
-      <RouterLink to="/">Головна</RouterLink>
-    </nav>
-  </header>
-  <RouterView />
+  <AuthView v-if="!auth.isAuthed" />
+  <AppShell v-else />
 </template>
-
-<style scoped>
-.app-header {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #ddd;
-  font-family: system-ui, sans-serif;
-}
-</style>

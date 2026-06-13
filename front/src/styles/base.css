@@ -1,0 +1,30 @@
+/* =========================================================================
+   Sync Work — базовий ресет + утиліти (перенесено з прототипу styles.css)
+   ========================================================================= */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-size: 14px;
+  letter-spacing: -0.006em;
+}
+#app { height: 100vh; }
+button { font-family: inherit; }
+.mono { font-family: var(--mono); font-feature-settings: "tnum" 1; letter-spacing: -0.01em; }
+::selection { background: var(--accent-soft); }
+
+/* scrollbars */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: content-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* common utils */
+.muted { color: var(--text-3); }
+.faint { color: var(--text-faint); }
+.row { display: flex; align-items: center; }
+.spacer { flex: 1; }

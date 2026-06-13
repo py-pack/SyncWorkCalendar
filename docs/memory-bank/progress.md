@@ -22,15 +22,40 @@
 
 ## Що в роботі (OpenSpec)
 
-- **[`restructure-monorepo-frontend`](../../openspec/changes/restructure-monorepo-frontend/)**
-  — **реалізовано** (47/47 тасків; до коміту + архівації). Бекенд переїхав
-  `src/` → `api/app/` (пакет `src`→`app`, ~90 імпортів), каркас `front/`
-  (Vue 3 + Vite + TS, vue-router, Pinia, `fetch`-клієнт), мультисервісний
-  Docker на корені (dev-проксі Vite → `api`), дворівневі інструкції агентів.
-  Доменна логіка та схема БД не зачіпались (alembic head `ef2c7288bbb0`).
-  4 capability: `monorepo-layout`, `frontend-app`, `container-orchestration`,
-  `workspace-conventions`. Деталі — `decisinLog.md` → D-012.
-- Попередня — [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
+- **Веб-UI за дизайном Sync Work — 3 зміни (2026-06-13; усі
+  `validate --strict` валідні):**
+  - [`add-web-ui-foundation`](../../openspec/changes/archive/2026-06-13-add-web-ui-foundation/)
+    — **заархівована 2026-06-13** (44/44 задачі; браузерний QA підтверджено
+    робочим end-to-end — логін/пароль + Google-вхід; код у робочому дереві,
+    лишився git-commit). Дизайн-система +
+    app shell + авторизація (Google popup/`code` + One Tap, серверна верифікація
+    `google-auth`, match-by-email, колонка `api_users.email`, alembic head
+    `c03728fbb1cf`, єдиний JWT). 5 capability злиті в `openspec/specs/` і
+    канонічні: **нові** `web-design-system`, `web-app-shell`, `web-auth`,
+    `api-google-auth` + **MODIFIED** `frontend-app`. Рішення — `decisinLog.md`
+    → D-013 (Google-вхід), D-014 (front HTTP-клієнт: authed-by-default +
+    токен через DI-provider).
+  - [`add-calendar-timesheet`](../../openspec/changes/add-calendar-timesheet/)
+    — тижневий календар із повним редагуванням і записом на бекенд.
+    Capability: `frontend-calendar`, `api-calendar` (редаговний блок =
+    `worklog_sync_tasks` + `billable`; активує `pre_update→update→updated`).
+  - [`add-data-screens`](../../openspec/changes/add-data-screens/) — таблиці
+    TimeCamp/Jira/Tempo, журнал, користувачі. Capability:
+    `frontend-data-tables`, `frontend-sync-journal`, `frontend-users`,
+    `api-users-management`, `api-jira-read`.
+  - Відкладено окремими майбутніми змінами: RBAC-ролі, untracked→issue
+    matching.
+- [`restructure-monorepo-frontend`](../../openspec/changes/archive/2026-06-12-restructure-monorepo-frontend/)
+  — заархівована **2026-06-12** (end-to-end запуск підтверджено). Монорепо:
+  бекенд `api/` (пакет `app`, переїхав із `src/`), фронт `front/` (Vue 3 +
+  Vite + TS, vue-router, Pinia, `fetch`), мультисервісний Docker на корені з
+  dev hot-reload, host-nginx на доменах `sync.loc`/`sync.dev`, дворівневі
+  інструкції агентів, host-порти за конвенцією (продукт 33: api `10331`,
+  front `10332`, db `11331`). Доменна логіка/схема БД не зачіпались (alembic
+  head `ef2c7288bbb0`). 4 capability злиті в `openspec/specs/`
+  (`monorepo-layout`, `frontend-app`, `container-orchestration`,
+  `workspace-conventions`). Деталі — `decisinLog.md` → D-012.
+- [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)
   — заархівована **2026-06-12**: REST API підтверджено робочим, 5
   capability-специфікацій злиті в `openspec/specs/`. Тех-довідка —
   `docs/technical/api-reference.md`.

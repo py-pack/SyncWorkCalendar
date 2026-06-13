@@ -3,7 +3,8 @@
 Ground-truth довідник по схемі локальної Postgres БД `db_swc`. Усі таблиці,
 колонки, типи, ключі, індекси та enum-и зафіксовані з **живої БД** через
 PyCharm DataGrip MCP станом на 2026-05-13. Поточний `alembic head`:
-`ef2c7288bbb0` (додано `api_users` + `api_jobs` для HTTP-шару).
+`c03728fbb1cf` (додано `api_users.email` для Google-входу; попередній —
+`ef2c7288bbb0`, `api_users` + `api_jobs`).
 
 Якщо схема змінилась — оновити цей файл одним прогоном (див. §9). Усі деталі
 поведінки (як саме поле читається/пишеться) — у інтеграційних доках і
@@ -227,6 +228,7 @@ State-machine — у `../../memory-bank/systemPatterns.md`.
 | `id`            | integer     | ✓  | `nextval('api_users_id_seq')`      | PK                                                  |
 | `username`      | varchar     | ✓  | —                                  | UNIQUE (`uq_api_users_username`); імʼя для login    |
 | `password_hash` | varchar     | ✓  | —                                  | bcrypt-хеш                                          |
+| `email`         | varchar     |    | —                                  | UNIQUE (`uq_api_users_email`), nullable; зіставлення Google-акаунта (match-by-email, lower-case) |
 | `worker_key`    | varchar     |    | —                                  | Jira key для sync-trigger-ів; null → 400 на worklog-енд |
 | `is_active`     | boolean     | ✓  | —                                  | `false` → login завжди повертає 401                 |
 | `created_at`    | timestamptz | ✓  | —                                  | ставиться event-листенером `_stamp_api_user_timestamps` |

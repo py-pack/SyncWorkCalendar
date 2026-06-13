@@ -41,6 +41,10 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
         lifespan=_lifespan,
+        # За nginx API монтується під /api (префікс зрізається проксі), тож docs
+        # мають посилатися на /api/openapi.json. Порожній root_path = прямий доступ
+        # до порту. FastAPI очікує значення без трейлінг-слеша.
+        root_path=settings.api.root_path.rstrip("/"),
     )
 
     app.add_middleware(

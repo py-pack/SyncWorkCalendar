@@ -2,50 +2,105 @@
 
 ## Дата оновлення
 
-2026-06-12 — реалізовано `restructure-monorepo-frontend` (до архівації).
+2026-06-13 — **фаза 1 веб-UI (`add-web-ui-foundation`) заархівована**
+(специфікації злиті в `openspec/specs/`; код у робочому дереві, ще не
+закомічено); фази 2–3 — на proposal-стадії.
+
+## Статус фази 1 (`add-web-ui-foundation`) — заархівована 2026-06-13
+
+Реалізовано (44/44 задачі; браузерний QA — секція 9 — **підтверджено робочим
+2026-06-13**: логін/пароль і Google-вхід працюють end-to-end). Зміна
+заархівована в
+[`archive/2026-06-13-add-web-ui-foundation/`](../../openspec/changes/archive/2026-06-13-add-web-ui-foundation/);
+5 capability злиті в `openspec/specs/` і є канонічними: **нові**
+`web-design-system`, `web-app-shell`, `web-auth`, `api-google-auth` +
+**MODIFIED** `frontend-app` (auth-gated роутинг на 6 екранів).
+
+**Операційні нюанси (Docker), доведені при ввімкненні Google-входу 2026-06-13:**
+(1) `VITE_GOOGLE_CLIENT_ID` (публічний) прокинуто у front-сервіс через
+`docker-compose.yml` — Vite не читає кореневий `.env`; (2) `google-auth`
+довстановлено у venv api (`uv sync` у контейнері), бо анонімний `/app/.venv`-том
+застарів після додавання залежності й валив старт із `ModuleNotFoundError`.
+Симптоми, команди й env-розподіл — `docs/technical/dev-environment.md` (§4, §7).
+
+- **Backend:** колонка `api_users.email` (`UNIQUE`, nullable; alembic head
+  `c03728fbb1cf`, **застосовано**); `APIConfig.google_client_id/secret`;
+  `APIUserDAO.get_by_email` (lower-case, лише активні); `POST /auth/google`
+  (`google-auth`-верифікація credential / обмін code; match-by-email; єдиний
+  JWT; `401 "account not found"`; `503` без конфігу). Рішення — `decisinLog.md`
+  → **D-013**. Verified live: `503`/`422`/`401` + `code`-без-secret `503`.
+- **Frontend:** дизайн-система (токени/теми/акценти/щільність, 12 UI-примітивів,
+  іконки, Geist-шрифти), i18n UK/EN (`useI18n` поверх `ui.lang`), dot-path
+  storage-обгортка (D7), stores `ui`/`auth`, `api/client` (authed-by-default +
+  токен через DI-provider + 401-хук, **D-014**), app shell (нав-секції, collapse,
+  user-chip, Tweaks), `vue-router` на 6 екранів (StubView — фази 2–3), auth-gate,
+  екран входу (логін/пароль + Google popup/`code` + One Tap). `npm run build`
+  (`vue-tsc` + `vite`) — чисто.
+- **Залишок:** лише git-commit (реалізація + архів лежать у робочому дереві
+  незакоміченими — коміт за рішенням користувача).
 
 ## Поточний фокус
 
-**Зміна
-[`restructure-monorepo-frontend`](../../openspec/changes/restructure-monorepo-frontend/)
-реалізована** (усі 47 тасків виконані; лишилось закомітити + заархівувати).
-Що зроблено:
+**Перенесення дизайну Sync Work у фронт — 3 OpenSpec-зміни (фаза 1 —
+заархівована 2026-06-13; фази 2–3 — proposal).** Джерело — handoff-бандл із Claude Design, який лежить **локально в
+[`docs/design/`](../design/)** (прототип React+CSS у `docs/design/project/src/*`,
+наявний OpenAPI — `docs/design/project/uploads/sync.work.json`). 7 екранів:
+авторизація, календар, таблиці TimeCamp/Jira/Tempo, журнал синку,
+користувачі; двомовність UK/EN, світла/темна теми, Tweaks. Розбито на 3
+послідовні фази:
 
-- **Бекенд переїхав `src/` → `api/app/`** (пакет перейменовано `src`→`app`,
-  ~90 імпортів переписано). Smoke зелений: `from app.api.app import app`
-  (24 роути), `python -m app.cli --help`, `alembic heads`/`current` =
-  `ef2c7288bbb0`, `make dev` стартує і віддає `/healthz`. Усі бекенд-команди
-  тепер із теки `api/` (кореневий `Makefile` робить `cd api && …`).
-- **Env-фікс:** `app/config.py` резолвить env-файли **абсолютними** шляхами
-  (cwd бекенду — `api/`), пріоритет за зростанням:
-  `api/.env.template` (дефолти, перенесено сюди з кореня) → `<root>/.env`
-  (спільний, його ж читає docker-compose) → `api/.env` (опційний локальний
-  override, gitignore, не бакається в образ). Реальні env — над усіма;
-  `env_ignore_empty=True`. Без цього `make dev` падав на
-  `APP__API__JWT_SECRET is required`. Деталь — `design.md` D2.
-- **Каркас `front/`** на Vue 3 + Vite + TypeScript: `vue-router`, **Pinia**,
-  типізований **`fetch`**-клієнт (`VITE_API_BASE_URL`). `npm run build`
-  (`vue-tsc --noEmit` + `vite build`) і dev-server `:5173` — перевірені.
-- **Docker на корені, мультисервіс + dev hot-reload:** `api` (`./api`,
-  `uvicorn --reload`, код-маунт, polling) + `front` (`./front`, Vite,
-  polling) + `db`, спільна мережа `appnet`. Доступ через **host-nginx** на
-  `http://sync.loc`/`https://sync.dev` (`docker/nginx.loc.conf`): `/` → Vite,
-  `/api/` → бек. HMR за двома доменами — канонічний `wss://sync.dev`
-  (env `VITE_HMR_*`, потрібен mkcert-cert). Гайд —
-  `docs/technical/dev-environment.md`. Конфіги валідні (`vite build`,
-  `docker compose config`); образи зібрані. End-to-end `up`+nginx — за
-  користувачем (cert/домени + зупинка host-процесів).
-- **Дворівневі інструкції:** кореневі `AGENTS.md`/`CLAUDE.md` — роутери;
-  `api/` і `front/` мають власні з легкими вказівниками на скіли. Memory Bank
-  оновлено (`techContext`, `systemPatterns`, `decisinLog` → D-012).
+1. [`add-web-ui-foundation`](../../openspec/changes/archive/2026-06-13-add-web-ui-foundation/)
+   — **заархівована 2026-06-13.** Дизайн-система
+   (токени/теми/примітиви/іконки/i18n/Tweaks), app shell
+   (навігація, маршрути, auth-gate, user-chip), екран входу і **Google-вхід**
+   (popup + One Tap, серверна верифікація, match-by-email до `api_users`,
+   без авто-реєстрації; нова колонка `api_users.email`).
+2. [`add-calendar-timesheet`](../../openspec/changes/add-calendar-timesheet/) —
+   тижневий timesheet (головний екран) із **повним редагуванням блоків і
+   записом на бекенд**: drag/resize/split/duplicate/delete + sync; новий
+   `GET /calendar` і CRUD `/calendar/blocks`; редаговний блок =
+   `worklog_sync_tasks` (+ `billable`), TimeCamp read-only; редагування
+   synced-блоку активує зарезервовані `pre_update→update→updated` і
+   update/delete worklog у Tempo.
+3. [`add-data-screens`](../../openspec/changes/add-data-screens/) — таблиці
+   TimeCamp/Jira/Tempo, журнал `api_jobs` (з verify), користувачі +
+   **Users CRUD** (`/users`, invite без пароля → вхід через Google; поля
+   `name`, nullable `password_hash`) і мінімальний Jira-read
+   (`GET /jr-issues`, `PATCH /jr-projects/{id}`).
 
-Доменна логіка, моделі та схема БД не змінювалися.
+**Свідомо відкладено** (UI показує, дія вимкнена; окремі майбутні зміни):
+RBAC-ролі (admin/member/viewer), untracked→issue matching. Усі 3 зміни
+валідні (`openspec validate --strict`). Деталі рішень — у `design.md`
+кожної зміни.
 
-**Не перевірено в цій сесії (середовищне обмеження, не регресія):**
-end-to-end `docker compose up` усього стека — щоб не чіпати вже підняті
-9-денні контейнери (`tplfastapi_db_pgsql` на `11331`, той самий
-`container_name`) і живу БД. Образи `api`/`front` зібрані, `compose config`
-валідний; alembic уже конектиться до живої БД (head `ef2c7288bbb0`).
+Попередня зміна
+[`restructure-monorepo-frontend`](../../openspec/changes/archive/2026-06-12-restructure-monorepo-frontend/)
+заархівована 2026-06-12 — **end-to-end запуск підтверджено** користувачем
+(стек піднявся, домени `sync.loc`/`sync.dev` і HMR працюють). 4 нові
+capability-специфікації злиті в `openspec/specs/` (`monorepo-layout`,
+`frontend-app`, `container-orchestration`, `workspace-conventions`) і є
+канонічними.
+
+Підсумок результату (канонічні деталі — у `systemPatterns.md`/`techContext.md`/
+`decisinLog.md` → D-012):
+
+- **Монорепо:** бекенд у `api/` (пакет `app`, переїхав із `src/`, ~90
+  імпортів), фронт у `front/` (Vue 3 + Vite + TS, `vue-router`, Pinia,
+  `fetch`-клієнт). Docker / кореневий `Makefile` / `docs/` / `openspec/` —
+  спільні на корені. Дворівневі інструкції агентів (кореневі роутери +
+  per-folder `AGENTS.md`/`CLAUDE.md` з легкими вказівниками).
+- **Env:** `app/config.py` вантажить env абсолютними шляхами, пріоритет
+  `api/.env.template` → `<root>/.env` → `api/.env`.
+- **Host-порти (конвенція, продукт 33):** api `10331`, front `10332`,
+  db `11331` (схема `TT AA S`; скіл `preferred-docker-images`).
+- **Dev:** `docker compose up` (hot-reload обох сервісів) або host-run
+  (`make dev`/`make front-dev` + db у docker); доступ через host-nginx
+  (`docker/nginx.loc.conf`) на двох доменах. Гайд —
+  [`docs/technical/dev-environment.md`](../technical/dev-environment.md).
+
+Доменна логіка, моделі та схема БД не змінювалися (alembic head
+`ef2c7288bbb0`). **Незакомічене:** уся реалізація лежить у робочому дереві —
+коміт за рішенням користувача.
 
 Попередня зміна
 [`add-rest-api`](../../openspec/changes/archive/2026-06-12-add-rest-api/)

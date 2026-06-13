@@ -1,0 +1,62 @@
+/* ============================ Data tables ============================ */
+.dt-wrap { border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); box-shadow: var(--shadow-sm); }
+.dt { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dt thead th {
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-3); padding: 11px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+  white-space: nowrap; position: sticky; top: 0; z-index: 2;
+}
+.dt thead th.is-right { text-align: right; }
+.dt tbody td { padding: 11px 14px; border-bottom: 1px solid var(--hair); color: var(--text); vertical-align: middle; }
+.dt tbody tr:last-child td { border-bottom: none; }
+.dt tbody tr.is-click { cursor: pointer; }
+.dt tbody tr:hover { background: var(--surface-2); }
+.dt tbody tr.is-sel { background: var(--accent-soft); }
+.dt tbody tr.is-sel:hover { background: var(--accent-soft); }
+.dt td.is-right { text-align: right; }
+.dt__sel { width: 42px; padding-left: 14px !important; padding-right: 0 !important; }
+.dt__empty { text-align: center; color: var(--text-faint); padding: 40px !important; }
+
+.dt-name { display: flex; align-items: center; gap: 9px; }
+.dt-name__id { color: var(--text-faint); font-size: 11.5px; }
+.user-name { display: flex; flex-direction: column; line-height: 1.3; }
+.user-name span:first-child { font-weight: 550; }
+.user-name .muted { font-size: 12px; }
+
+.key-pill { background: var(--canvas); border: 1px solid var(--border); padding: 2px 7px; border-radius: 5px; font-size: 12px; font-weight: 500; }
+.map-arrow { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-ink); }
+.map-arrow svg { color: var(--text-faint); }
+.projtag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 100px; font-size: 12.5px; font-weight: 500; }
+.projtag__dot { width: 7px; height: 7px; border-radius: 50%; }
+
+/* pipeline / summary bar */
+.pipe { display: flex; align-items: center; gap: 14px; padding: 11px 24px; border-bottom: 1px solid var(--border); background: var(--surface-2); flex: none; flex-wrap: wrap; }
+.pipe__summary { display: flex; align-items: center; gap: 16px; }
+.pipe__stat { display: flex; align-items: center; gap: 8px; }
+.pipe__stat b { font-size: 14px; }
+.pipe__steps { display: flex; align-items: center; gap: 8px; }
+.pipe__label { font-size: 11.5px; color: var(--text-faint); margin-right: 4px; }
+.job-trig { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12.5px; }
+.job-trig svg { color: var(--accent); }
+
+/* job detail sheet */
+.jobdet { padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; }
+.jobdet__row { font-size: 14px; }
+.jobdet__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.jobdet__grid > div { display: flex; flex-direction: column; gap: 4px; }
+.jobdet__grid .muted { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.jobdet__grid .mono { font-size: 13px; }
+.jobdet__sec { display: flex; flex-direction: column; gap: 7px; }
+.jobdet__lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); }
+.jobdet__lbl.is-err { color: var(--red); }
+.jobdet__json { margin: 0; background: var(--canvas); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px 14px; font-size: 12px; line-height: 1.55; overflow-x: auto; color: var(--text-2); }
+.jobdet__json.is-err { background: var(--red-soft); border-color: transparent; color: var(--red); }
+.jobdet__verify { display: flex; align-items: center; gap: 10px; padding: 14px; background: var(--amber-soft); border-radius: var(--r-md); color: var(--amber); font-size: 13px; font-weight: 500; }
+.jobdet__verify .sw-btn { margin-left: auto; }
+
+/* user form */
+.userform { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.userform__note { display: flex; align-items: flex-start; gap: 8px; color: var(--text-3); font-size: 11.5px; line-height: 1.5; padding: 12px; background: var(--surface-2); border-radius: var(--r-sm); }
+.userform__note svg { flex: none; margin-top: 1px; }
+.userform__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.userform__foot .sw-btn { height: 38px; }

@@ -7,25 +7,17 @@
 import { computed, onMounted, ref } from 'vue'
 
 import type { JRProject } from '@/api/types'
+import SyncFilter from '@/components/data/SyncFilter.vue'
+import SyncState from '@/components/data/SyncState.vue'
 import JrSyncSettingsModal from '@/components/projects/JrSyncSettingsModal.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Icon from '@/components/ui/Icon.vue'
 import IconBtn from '@/components/ui/IconBtn.vue'
-import Segmented from '@/components/ui/Segmented.vue'
-import type { SegmentedOption } from '@/components/ui/types'
 import { useI18n } from '@/i18n'
 import { useTablesStore } from '@/stores/tables'
 
 const { t } = useI18n()
 const store = useTablesStore()
-
-type Active = 'active' | 'inactive' | 'all'
-
-const filterOpts = computed<SegmentedOption[]>(() => [
-  { value: 'all', label: t.value.flt_all },
-  { value: 'active', label: t.value.flt_active },
-  { value: 'inactive', label: t.value.flt_inactive },
-])
 
 const query = ref('')
 
@@ -33,8 +25,8 @@ const query = ref('')
 // даних, без re-fetch.
 const filtered = computed<JRProject[]>(() => {
   let list = store.jrProjects
-  if (store.jrActive === 'active') list = list.filter((p) => p.is_watched)
-  else if (store.jrActive === 'inactive') list = list.filter((p) => !p.is_watched)
+  if (store.jrActive === 'synced') list = list.filter((p) => p.is_watched)
+  else if (store.jrActive === 'unsynced') list = list.filter((p) => !p.is_watched)
 
   const q = query.value.trim().toLowerCase()
   if (q) {
@@ -44,10 +36,6 @@ const filtered = computed<JRProject[]>(() => {
   }
   return list
 })
-
-function onFilter(v: string): void {
-  store.jrActive = v as Active
-}
 
 const editing = ref<JRProject | null>(null)
 function openSettings(p: JRProject): void {
@@ -62,12 +50,7 @@ onMounted(() => {
 <template>
   <div class="tct-wrap">
     <div class="tct-bar">
-      <Segmented
-        :model-value="store.jrActive"
-        :options="filterOpts"
-        size="sm"
-        @update:model-value="onFilter"
-      />
+      <SyncFilter :model-value="store.jrActive" @update:model-value="store.jrActive = $event" />
       <span class="spacer" />
       <label class="tct-search">
         <Icon name="search" :size="15" />
@@ -94,10 +77,7 @@ onMounted(() => {
         <span class="tct__count" :title="t.col_issues">
           <Icon name="list" :size="13" />{{ p.issues_count }}
         </span>
-        <span class="tct__state" :class="{ 'is-on': p.is_watched }">
-          <span class="tct__statedot" />
-          {{ p.is_watched ? t.sync_state_on : t.sync_state_off }}
-        </span>
+        <SyncState :synced="p.is_watched" />
         <IconBtn name="settings" size="sm" :title="t.settings" @click="openSettings(p)" />
       </div>
     </div>

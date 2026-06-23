@@ -117,11 +117,12 @@
 .tct__name { display: inline-flex; align-items: center; gap: 8px; color: var(--text); flex: 0 1 auto; max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tct__id { color: var(--text-faint); font-size: 11.5px; flex: none; }
 
-/* індикатор стану синку */
-.tct__state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); white-space: nowrap; }
-.tct__state.is-on { color: var(--green); }
-.tct__statedot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
-.tct__state.is-on .tct__statedot { background: var(--green); }
+/* єдиний індикатор стану синку (SyncState) — ІДЕНТИЧНИЙ на всіх дані-екранах
+   (/timecamp, /projects/timecamp, /projects/jira). Див. systemPatterns.md. */
+.syncst { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.syncst.is-on { color: var(--green); }
+.syncst__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+.syncst.is-on .syncst__dot { background: var(--green); }
 
 /* лічильник задач (Jira-проекти) */
 .tct__count { display: inline-flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 12.5px; }
@@ -162,3 +163,36 @@
 
 .ssm__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .ssm__foot .sw-btn { height: 38px; }
+
+/* ============ TimeCamp entries (rework-timecamp-entries-screen) ============ */
+/* тулбар: усі фільтри зліва (компактний period picker + сегментований фільтр) */
+.tcbar { gap: 10px; }
+
+/* компактний вибір періоду (PeriodPicker, D9) */
+.tcpp { position: relative; display: inline-flex; }
+.tcpp__pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 232px; padding: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 8px;
+}
+.tcpp__presets { display: flex; flex-direction: column; gap: 2px; }
+.tcpp__preset {
+  text-align: left; border: none; background: transparent; color: var(--text-2);
+  padding: 7px 9px; border-radius: var(--r-sm); font-size: 13px; cursor: pointer;
+}
+.tcpp__preset:hover { background: var(--surface-2); color: var(--text); }
+.tcpp__preset.is-on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
+.tcpp__div { height: 1px; background: var(--border); }
+.tcpp__custom { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 0; }
+.tcpp__field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.tcpp__field .sw-input { height: 32px; font-size: 13px; text-transform: none; letter-spacing: 0; }
+
+/* пагінація під таблицею */
+.tcpage { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; }
+.tcpage__pos { font-size: 12.5px; color: var(--text-3); }
+
+/* попап синку записів (Sheet body) */
+.tcsync { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.tcsync__hint { color: var(--text-3); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.tcsync__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.tcsync__foot .sw-btn { height: 38px; }

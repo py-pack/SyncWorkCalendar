@@ -53,3 +53,23 @@ class UntrackedEntry(BaseModel):
     end_at: datetime
     tc_project_id: int | None
     tc_project_name: str | None
+
+
+class TCEntryItem(BaseModel):
+    """Рядок списку `GET /tc-entries`: запис TimeCamp із похідним станом синку."""
+
+    id: int
+    description: str | None
+    start_at: datetime
+    end_at: datetime
+    tc_project_id: int | None
+    tc_project_name: str | None
+    issue_key: str | None
+    is_synced: bool
+
+
+class TCEntriesResponse(BaseModel):
+    """Сторінкована відповідь `GET /tc-entries` (прецедент `GET /api-jobs`)."""
+
+    items: list[TCEntryItem]
+    total: int

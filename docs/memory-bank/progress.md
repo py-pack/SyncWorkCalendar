@@ -22,6 +22,38 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`rework-timecamp-entries-screen`](../../openspec/changes/archive/2026-06-23-rework-timecamp-entries-screen/)
+  — **заархівовано 2026-06-23 (27/27; браузерний QA підтверджено користувачем).
+  2 дельти злиті в `openspec/specs/` і канонічні: `api-sync-status` (ADDED
+  `GET /tc-entries`), `frontend-data-tables` (MODIFIED «Екран TimeCamp» + ADDED
+  «Єдине відображення стану синку»). `npm run build` чисто, backend live smoke +
+  DAO-перевірка PASS, `validate --strict` OK.** Переробка екрана `/timecamp`:
+  замість лише незіставлених
+  записів (`GET /tc-entries/untracked`, захардкоджений фільтр + 6-міс період +
+  авто-синк) — усі записи з локальної БД за обраний період, серверна пагінація,
+  фільтр стану синку (`усі|синхронізовані|не синхронізовані`), **явна** кнопка
+  синку з попапом (період + шаблони). Рішення користувача: екрани читають **лише
+  з БД**, синк **лише кнопкою** (без авто при відкритті) — патерн далі для `/jira`
+  і `/tempo`; «синхронізовано» — бінарно за наявністю worklog у Tempo
+  (`worklog_sync_task` `created`/`updated`, scoped по `worker_key`).
+  Backend (`routers/sync_status.py` + `TCEntriesDAO.list_with_sync_state` через
+  EXISTS на WST + схеми `TCEntryItem`/`TCEntriesResponse`): новий `GET /tc-entries`
+  (`synced` фільтр + `limit`/`offset`/`total` + `is_synced`), `untracked`
+  незмінний; **без міграції** (head `10b7dc50b00f`). Frontend: `api/types.ts`+
+  `client.ts` (`tcEntries`), `lib/period.ts` (спільний `PERIOD_PRESETS`),
+  `stores/tables.ts` (стан+`loadTcEntries`/`syncTcEntries`, прибрано
+  `autoSyncEntries`/`loadUntracked`), нова `components/timecamp/SyncEntriesModal.vue`,
+  переписаний `TimeCampView` (`DataPage`+пагінація+попап), i18n, CSS. **UI-рефінмент
+  за фідбеком (D9):** компактний `components/data/PeriodPicker.vue` (dropdown зі
+  шаблонами всередину, без зовнішньої бібліотеки) переюзаний тулбаром і попапом;
+  фільтр — наявний `Segmented` (усі контроли зліва); задача — окрема колонка.
+  **Уніфікація «мови синку» (D10/D11):** порядок колонок Проект→Задача→Опис→Дата→
+  Час→Стан; дата `дд.мм.рррр` (`fmtDate`); спільні `components/data/SyncState.vue`
+  + `SyncFilter.vue` (канонічний `SyncTri`, англ. підписи) — **ідентично** на
+  `/timecamp`+`/projects/timecamp`+`/projects/jira` (прибрано локальні стилі/опції;
+  патерн → `systemPatterns.md` + auto-memory). MODIFIED: `api-sync-status`,
+  `frontend-data-tables`. Деталі — `design.md` (D1–D11).
+
 - [`rework-jira-projects-subview`](../../openspec/changes/archive/2026-06-13-rework-jira-projects-subview/)
   — **заархівовано 2026-06-14 (11/12; браузерний QA 5.2 — наживо; git-commit).
   Дельта злита в `openspec/specs/frontend-data-tables/` (MODIFIED «Екран

@@ -13,12 +13,15 @@ import {
   ApiError,
   type JRIssue,
   type JRProject,
+  type Period,
+  type SyncTri,
+  type TCEntry,
   type TCProject,
-  type UntrackedEntry,
+  type TCSyncFilter,
   type WorklogStatus,
   type WorklogSyncTask,
 } from '@/api/types'
-import { reviewPeriod, syncPeriod } from '@/lib/period'
+import { defaultReviewPeriod, reviewPeriod, syncPeriod } from '@/lib/period'
 
 function errMsg(e: unknown): string {
   if (e instanceof ApiError) return e.detail
@@ -30,15 +33,23 @@ export const useTablesStore = defineStore('tables', () => {
   const period = reviewPeriod()
   const sync = syncPeriod()
 
-  // TimeCamp
+  // TimeCamp проекти (екран «Проекти»)
   const tcProjects = ref<TCProject[]>([])
   const tcProjectsLoaded = ref(false)
-  const tcActive = ref<'active' | 'inactive' | 'all'>('all')
-  const tcUntracked = ref<UntrackedEntry[]>([])
+  const tcActive = ref<SyncTri>('all') // фільтр за станом синку (is_sync)
+  // TimeCamp записи (екран /timecamp): читання з БД за період + фільтр стану
+  // синку + серверна пагінація. Авто-синку немає — лише явна кнопка (D1).
+  const TC_PAGE_SIZE = 50
+  const tcEntries = ref<TCEntry[]>([])
+  const tcPeriod = ref<Period>(defaultReviewPeriod()) // дефолт — «цей місяць» (D6)
+  const tcSyncFilter = ref<TCSyncFilter>('all')
+  const tcOffset = ref(0)
+  const tcTotal = ref(0)
+  const tcLoading = ref(false)
   // Jira
   const jrProjects = ref<JRProject[]>([])
   const jrProjectsLoaded = ref(false)
-  const jrActive = ref<'active' | 'inactive' | 'all'>('all')
+  const jrActive = ref<SyncTri>('all') // фільтр за станом синку (is_watched)
   const jrIssues = ref<JRIssue[]>([])
   // Tempo / worklog sync tasks
   const wst = ref<WorklogSyncTask[]>([])
@@ -77,14 +88,47 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  /** Екран TimeCamp: лише незіставлені записи. */
-  async function loadUntracked(): Promise<void> {
+  /** Екран /timecamp: усі записи з локальної БД за поточний період/фільтр/сторінку
+   *  (`GET /tc-entries`). Жодного синку — лише читання (D1). */
+  async function loadTcEntries(): Promise<void> {
     error.value = null
+    tcLoading.value = true
     try {
-      tcUntracked.value = await api.tcUntracked(period)
+      const res = await api.tcEntries({
+        start: tcPeriod.value.start,
+        end: tcPeriod.value.end,
+        synced: tcSyncFilter.value,
+        limit: TC_PAGE_SIZE,
+        offset: tcOffset.value,
+      })
+      tcEntries.value = res.items
+      tcTotal.value = res.total
     } catch (e) {
       error.value = errMsg(e)
+    } finally {
+      tcLoading.value = false
     }
+  }
+
+  /** Зміна періоду перегляду → скид на першу сторінку + reload. */
+  function setTcPeriod(p: Period): Promise<void> {
+    tcPeriod.value = p
+    tcOffset.value = 0
+    return loadTcEntries()
+  }
+
+  /** Зміна фільтра стану синку → скид на першу сторінку + reload. */
+  function setTcSyncFilter(f: TCSyncFilter): Promise<void> {
+    tcSyncFilter.value = f
+    tcOffset.value = 0
+    return loadTcEntries()
+  }
+
+  /** Перехід сторінки (offset кламповано в межах [0, total)). */
+  function setTcOffset(offset: number): Promise<void> {
+    const max = Math.max(0, tcTotal.value - 1)
+    tcOffset.value = Math.min(Math.max(0, offset), max)
+    return loadTcEntries()
   }
 
   /** Екран Jira: задачі + проекти Jira (потрібні для кольорового тегу задачі).
@@ -158,32 +202,31 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
+  /** Явний синк записів TimeCamp за обраний у попапі період (ніколи не авто, D1).
+   *  Після успіху перезавантажує поточну сторінку списку з локальної БД. */
+  async function syncTcEntries(period: Period): Promise<void> {
+    error.value = null
+    try {
+      await api.syncTcEntries(period)
+      await loadTcEntries()
+    } catch (e) {
+      error.value = errMsg(e)
+      throw e // щоб попап/кнопка синку показали помилку
+    }
+  }
+
   // ---- авто-синк із зовнішніх джерел при відкритті екрана ----
-  // Екран спершу показує дані з БД (load*), потім у фоні тягне свіже з
-  // TimeCamp/Jira і перезавантажує. Захист від флуду: не пере-синкати, якщо
-  // синкали менш ніж SYNC_TTL_MS тому (швидка навігація туди-сюди).
+  // Екран спершу показує дані з БД (load*), потім у фоні тягне свіже з Jira і
+  // перезавантажує. Захист від флуду: не пере-синкати, якщо синкали менш ніж
+  // SYNC_TTL_MS тому (швидка навігація туди-сюди).
   //
-  // Лишилось для записів (TimeCamp) і задач (Jira); ПРОЕКТИ авто-синку більше
-  // не мають — лише явна кнопка `syncProjects` (D9).
+  // Лишилось лише для задач (Jira); ПРОЕКТИ і ЗАПИСИ TimeCamp авто-синку більше
+  // не мають — лише явні кнопки `syncProjects`/`syncTcEntries` (D1/D9).
 
   // 5 хв: кожен синк створює api_jobs (needs_verification), тож не пере-синкаємо
   // частіше — дані щонайбільше 5-хв давнини, без потоку job-ів на кожну навігацію.
   const SYNC_TTL_MS = 5 * 60_000
-  const lastSync = { entries: 0, issues: 0 }
-
-  /** Екран TimeCamp: освіжити записи за період. */
-  async function autoSyncEntries(): Promise<void> {
-    const now = Date.now()
-    if (now - lastSync.entries < SYNC_TTL_MS) return
-    lastSync.entries = now
-    try {
-      await api.syncTcEntries(sync)
-      await loadUntracked()
-    } catch (e) {
-      error.value = errMsg(e)
-      lastSync.entries = 0
-    }
-  }
+  const lastSync = { issues: 0 }
 
   /** Екран Jira: re-sync відомих ключів задач (API лише point-by-key, D3). */
   async function autoSyncIssues(): Promise<void> {
@@ -221,7 +264,13 @@ export const useTablesStore = defineStore('tables', () => {
     tcProjects,
     tcProjectsLoaded,
     tcActive,
-    tcUntracked,
+    tcEntries,
+    tcPeriod,
+    tcSyncFilter,
+    tcOffset,
+    tcTotal,
+    tcLoading,
+    tcPageSize: TC_PAGE_SIZE,
     jrProjects,
     jrProjectsLoaded,
     jrActive,
@@ -231,14 +280,17 @@ export const useTablesStore = defineStore('tables', () => {
     error,
     loadTcProjects,
     loadJrProjects,
-    loadUntracked,
+    loadTcEntries,
+    setTcPeriod,
+    setTcSyncFilter,
+    setTcOffset,
+    syncTcEntries,
     loadIssues,
     loadTempo,
     saveTcSync,
     jrIssueSearch,
     saveJrWatched,
     syncProjects,
-    autoSyncEntries,
     autoSyncIssues,
     syncWstPrepare,
     syncWstResolve,

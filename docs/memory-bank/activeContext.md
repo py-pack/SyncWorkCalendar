@@ -2,11 +2,78 @@
 
 ## Дата оновлення
 
-2026-06-13 — **фази 1, 2 і 3 заархівовані**; код усіх у робочому дереві, не
-закомічено. Фаза 2 (`add-calendar-timesheet`, read-only візуалізація, D-016)
+2026-06-23 — **зміну `rework-timecamp-entries-screen` заархівовано** (27/27 задач;
+браузерний QA підтверджено користувачем). Дельти злиті в `openspec/specs/`:
+`api-sync-status` (ADDED `GET /tc-entries`), `frontend-data-tables` (MODIFIED
+«Екран TimeCamp» + ADDED «Єдине відображення стану синку»). Деталі — нижче.
+2026-06-13 — **фази 1, 2 і 3 заархівовані**; код усіх у робочому дереві, не закомічено. Фаза 2 (`add-calendar-timesheet`, read-only візуалізація, D-016)
 — **реалізована, браузерний QA пройдено наживо, заархівована 2026-06-13**;
 2 нові capability злиті в `openspec/specs/` і канонічні: `api-calendar`,
 `frontend-calendar`. Лишився лише git-commit.
+
+## Заархівована зміна: `rework-timecamp-entries-screen` (заархівовано 2026-06-23)
+
+**Реалізовано і заархівовано 2026-06-23 (27/27 задач; браузерний QA підтверджено
+користувачем). `npm run build` чисто; backend live smoke + DAO-перевірка PASS;
+`validate --strict` — OK. 2 дельти злиті в `openspec/specs/` і канонічні:
+`api-sync-status` (ADDED `GET /tc-entries`), `frontend-data-tables` (MODIFIED
+«Екран TimeCamp» + ADDED «Єдине відображення стану синку»).** Тека —
+[`archive/2026-06-23-rework-timecamp-entries-screen/`](../../openspec/changes/archive/2026-06-23-rework-timecamp-entries-screen/).
+Переробка екрана **`/timecamp`**: був показ лише незіставлених записів
+(`GET /tc-entries/untracked` із захардкодженим `meta IS NULL` + немаплений проект),
+період зашито (6 міс), без пагінації, синк — авто у фоні при відкритті. Стало:
+**усі** записи з локальної БД за обраний період, серверна пагінація, фільтр стану
+синку, **явна** кнопка синку з попапом.
+
+**Затверджені рішення користувача (патерн на майбутнє):** (1) дані-екрани читають
+**лише з локальної БД**; синк — **тільки** явною кнопкою з вибором періоду;
+**авто-синк при відкритті прибрано** (згодом — синк за розкладом). Той самий патерн
+далі до **`/jira`** і **`/tempo`** окремими змінами (auto-memory
+`data-pages-no-auto-sync`). (2) «Синхронізовано» — **бінарно**: запис synced, якщо
+є `worklog_sync_task` у `created`/`updated` (worklog у Tempo), scoped по `worker_key`
+(як `GET /calendar`).
+
+**Реалізація:**
+- **Backend (`api/`, без alembic-міграції, head лишився `10b7dc50b00f`):** новий
+  `GET /tc-entries` у `routers/sync_status.py` (`list_tc_entries`; дефолт періоду —
+  поточний місяць через `_current_month()`; `synced=all|synced|unsynced`;
+  `limit` 50/кап 200; `offset`; валідація `start<=end` через `_period_or_400`).
+  `TCEntriesDAO.list_with_sync_state` — `tc_entries` ⋈ `tc_projects` + похідний
+  `is_synced` через **EXISTS** на `worklog_sync_tasks` (`created`/`updated`, scoped
+  по `worker_key` — чужий стан не протікає, `worker_key=None`→усе unsynced); фільтр
+  стану, сорт `start_at DESC`, серверна пагінація, окремий `COUNT` для `total`;
+  `issue_key` резолвиться в роутері (`meta.task`→`tc_project.issue_key`). Схеми
+  `TCEntryItem`/`TCEntriesResponse` у `schemas/sync_status.py`.
+  `GET /tc-entries/untracked` **незмінний** (під майбутній matching). Live smoke
+  (token під наявного user-а) + DAO-перевірка на `worker_key='JIRAUSER10303'`
+  (2819/3391 synced; інваріант synced+unsynced==all; scoping OK) — PASS.
+- **Frontend (`front/`):** `api/types.ts` (`TCEntry`/`TCEntriesResponse`/
+  `TCSyncFilter`), `api/client.ts` (`tcEntries({start,end,synced,limit,offset})`),
+  `lib/period.ts` (**спільний** `PERIOD_PRESETS` + `defaultReviewPeriod`= «цей
+  місяць», D6 — переюз picker'ом і попапом), `stores/tables.ts` (стан
+  `tcEntries/tcPeriod/tcSyncFilter/tcOffset/tcTotal/tcPageSize`,
+  `loadTcEntries`/`setTcPeriod`/`setTcSyncFilter`/`setTcOffset`/`syncTcEntries`;
+  **прибрано** `loadUntracked`/`autoSyncEntries`/`tcUntracked`),
+  `components/timecamp/SyncEntriesModal.vue` (`Sheet`+`PeriodPicker`), переписано
+  `views/TimeCampView.vue` на `DataPage`, i18n (UK+EN), CSS у `data.css`.
+  MODIFIED capability: `api-sync-status`, `frontend-data-tables`.
+- **UI-рефінмент за фідбеком (D9):** компактний **`components/data/PeriodPicker.vue`**
+  (одна кнопка → dropdown зі швидкими шаблонами всередину + ручні дати; поповер за
+  патерном `Menu.vue`, **без зовнішньої бібліотеки** — фронт тримає лише
+  `vue`/`vue-router`/`pinia`), переюзаний і тулбаром, і попапом синку; фільтр стану
+  синку — наявний `Segmented` (як на `/projects/timecamp`), усі контроли зліва;
+  стан синку в таблиці — спочатку іконкою, далі (D11) зведено до спільного
+  компонента; **задача — окрема колонка** (`issue_key` key-pill).
+- **Уніфікація «мови синку» + колонки/дата (D10/D11):** порядок колонок `/timecamp`
+  — **Проект → Задача → Опис → Дата → Час → Стан синку**; дата — `дд.мм.рррр`
+  (`lib/format.ts → fmtDate`). Два спільні компоненти `components/data/SyncState.vue`
+  (крапка + підпис `Synced`/`Not synced`) і `SyncFilter.vue` (`Segmented`
+  `All|Synced|Not synced`, канонічний `SyncTri`) — **ідентичні на всіх дані-екранах**;
+  переведено `/timecamp`, `/projects/timecamp`, `/projects/jira` (видалено локальні
+  `.tct__state`/`.tcst` і per-екранні `Segmented`-опції; `tcActive`/`jrActive`→`SyncTri`;
+  прибрано мертві i18n-ключі `flt_*`/`sync_state_*`/`tc_flt_*`). Підписи — англійською
+  в обох локалях (захардкоджено). Патерн зафіксовано в `systemPatterns.md` («Єдина
+  мова синку») + auto-memory `sync-status-unified-ui`. Рішення — `design.md` (D1–D11).
 
 ## Заархівована зміна: `rework-jira-projects-subview` (2026-06-14)
 

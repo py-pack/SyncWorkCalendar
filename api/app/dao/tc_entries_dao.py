@@ -2,7 +2,7 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import TCEntry, TCProject, StatusTaskEnum, WorklogSyncTask
@@ -87,6 +87,81 @@ class TCEntriesDAO(BaseDAO):
             .order_by(TCEntry.start_at)
         )
         return list((await db.execute(stmt)).mappings().all())
+
+    @classmethod
+    async def list_with_sync_state(
+        cls,
+        db: AsyncSession,
+        worker_key: str | None,
+        date_from: date,
+        date_to: date,
+        synced: str = "all",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """Записи TimeCamp за період зі станом синку (read, екран `/timecamp`).
+
+        `tc_entry` ⋈ `tc_project` (назва/issue_key) + похідний `is_synced` через
+        EXISTS на `worklog_sync_task` зі статусом `created`/`updated`, scoped по
+        поточному `worker_key` (чужий стан синку не протікає, D4). Фільтр
+        `synced` (`all|synced|unsynced`), сортування `start_at` спадно, серверна
+        пагінація; `total` — окремий COUNT за тим самим фільтром (період +
+        `synced`), без `limit`/`offset`. На відміну від `untracked`, нічого не
+        ховає. Лише читання — без мутацій і нових колонок (D2/D3).
+        """
+        period_lo = datetime.combine(date_from, time.min)
+        period_hi = datetime.combine(date_to, time.max)
+
+        # Бінарний стан синку: чи є для запису worklog у Tempo (target_id) для
+        # поточного worker_key. Корелює з TCEntry.id у будь-якому FROM = TCEntry.
+        synced_exists = (
+            select(WorklogSyncTask.id)
+            .where(
+                WorklogSyncTask.source_id == TCEntry.id,
+                WorklogSyncTask.worker_key == worker_key,
+                WorklogSyncTask.status.in_(
+                    [StatusTaskEnum.created, StatusTaskEnum.updated]
+                ),
+            )
+            .exists()
+        )
+
+        conditions = [
+            TCEntry.start_at >= period_lo,
+            TCEntry.start_at <= period_hi,
+        ]
+        if synced == "synced":
+            conditions.append(synced_exists)
+        elif synced == "unsynced":
+            conditions.append(~synced_exists)
+
+        total = (
+            await db.execute(
+                select(func.count()).select_from(TCEntry).where(*conditions)
+            )
+        ).scalar_one()
+
+        stmt = (
+            select(
+                TCEntry.id,
+                TCEntry.description,
+                TCEntry.start_at,
+                TCEntry.end_at,
+                TCEntry.tc_project_id,
+                TCEntry.meta,
+                TCProject.name.label("project_name"),
+                TCProject.issue_key.label("project_key"),
+                synced_exists.label("is_synced"),
+            )
+            .select_from(TCEntry)
+            .outerjoin(TCProject, TCProject.id == TCEntry.tc_project_id)
+            .where(*conditions)
+            .order_by(TCEntry.start_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await db.execute(stmt)).mappings().all()
+        return list(rows), int(total)
 
     async def get_entries_for_worklogs(
         self, db: AsyncSession,

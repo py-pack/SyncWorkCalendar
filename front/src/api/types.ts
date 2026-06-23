@@ -82,6 +82,32 @@ export interface UntrackedEntry {
   tc_project_name: string | null
 }
 
+/** Канонічний tri-стан синку — спільний для ВСІХ дані-екранів (фільтр + стор).
+ *  Один тип живить `SyncFilter`/`SyncState` і поля `tcActive`/`jrActive`/
+ *  `tcSyncFilter`, щоб «мова синку» була однакова скрізь. */
+export type SyncTri = 'all' | 'synced' | 'unsynced'
+
+/** Фільтр стану синку для `GET /tc-entries` (= канонічний `SyncTri`). */
+export type TCSyncFilter = SyncTri
+
+/** Рядок списку `GET /tc-entries`: запис TimeCamp із похідним станом синку. */
+export interface TCEntry {
+  id: number
+  description: string | null
+  start_at: string
+  end_at: string
+  tc_project_id: number | null
+  tc_project_name: string | null
+  issue_key: string | null
+  is_synced: boolean
+}
+
+/** Сторінкована відповідь `GET /tc-entries`. */
+export interface TCEntriesResponse {
+  items: TCEntry[]
+  total: number
+}
+
 // Jira ----------------------------------------------------------------------
 
 export interface JRProject {

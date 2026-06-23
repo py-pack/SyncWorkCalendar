@@ -26,8 +26,10 @@ import {
   type JRProjectPatch,
   type Period,
   type SyncTriggerResult,
+  type TCEntriesResponse,
   type TCProject,
   type TCProjectPatch,
+  type TCSyncFilter,
   type TokenResponse,
   type UntrackedEntry,
   type UserCreate,
@@ -158,6 +160,25 @@ export const api = {
   /** PATCH /tc-projects/{id} — локальні прапори (`is_sync`, `issue_key`). */
   patchTcProject(id: number, body: TCProjectPatch): Promise<TCProject> {
     return request<TCProject>(`/tc-projects/${id}`, jsonBody(body, 'PATCH'))
+  },
+
+  /** GET /tc-entries — усі записи TimeCamp за період зі станом синку (пагінація). */
+  tcEntries(params: {
+    start: string
+    end: string
+    synced?: TCSyncFilter
+    limit?: number
+    offset?: number
+  }): Promise<TCEntriesResponse> {
+    return request<TCEntriesResponse>(
+      `/tc-entries${qs({
+        start: params.start,
+        end: params.end,
+        synced: params.synced,
+        limit: params.limit,
+        offset: params.offset,
+      })}`,
+    )
   },
 
   /** GET /tc-entries/untracked — записи без зіставлення за період. */

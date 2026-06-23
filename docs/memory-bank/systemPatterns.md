@@ -140,6 +140,29 @@ props `tabs`/`activeTab` + подія `update:activeTab`; **router-agnostic**:
 екран = `DataPage` + вміст.** Виняток — `CalendarView` (власний `.cal`-grid, не
 таблиця).
 
+## Єдина «мова синку» (frontend) — обовʼязковий патерн
+
+Стан синку (синхронізовано / не синхронізовано) — **суть продукту**, тож його
+відображення і фільтр MUST виглядати **ідентично** на всіх дані-екранах. Для цього
+є **два спільні компоненти** (`rework-timecamp-entries-screen`, D11):
+
+- `components/data/SyncState.vue` — індикатор рядка: крапка + короткий підпис
+  (`Synced` / `Not synced`). Клас `.syncst` (`.is-on` = зелений).
+- `components/data/SyncFilter.vue` — сегментований фільтр `All | Synced |
+  Not synced` поверх `Segmented`; оперує канонічним tri-станом
+  `SyncTri = 'all' | 'synced' | 'unsynced'` (`api/types.ts`).
+
+Підписи — **англійською в обох локалях** (свідомо: єдиний короткий словник синку;
+захардкоджено в компонентах, без i18n-дивергенції). Семантика «synced» залежить від
+екрана (worklog у Tempo для записів `/timecamp`; `is_sync` для TimeCamp-проектів;
+`is_watched` для Jira-проектів), але **вигляд — один**. Застосовано на `/timecamp`,
+`/projects/timecamp`, `/projects/jira`; стори зводять `tcActive`/`jrActive`/
+`tcSyncFilter` до `SyncTri`.
+
+**Правило:** будь-який **новий дані-екран зі станом синку MUST переюзовувати**
+`SyncState`/`SyncFilter`, а не вводити власний стиль/підписи. Дата в таблицях —
+український формат `дд.мм.рррр` через `lib/format.ts → fmtDate`.
+
 ## Деталізовані описи інтеграцій
 
 - [TimeCamp](../technical/integrations/timecamp.md) — клієнт, DTO, моделі, DAO,

@@ -8,26 +8,18 @@
 import { computed, onMounted, ref } from 'vue'
 
 import type { TCProject } from '@/api/types'
+import SyncFilter from '@/components/data/SyncFilter.vue'
+import SyncState from '@/components/data/SyncState.vue'
 import SyncSettingsModal from '@/components/projects/SyncSettingsModal.vue'
 import Badge from '@/components/ui/Badge.vue'
 import Icon from '@/components/ui/Icon.vue'
 import IconBtn from '@/components/ui/IconBtn.vue'
-import Segmented from '@/components/ui/Segmented.vue'
-import type { SegmentedOption } from '@/components/ui/types'
 import { useI18n } from '@/i18n'
 import { useTablesStore } from '@/stores/tables'
 import { buildTree, flattenTree, safeColor } from '@/lib/tree'
 
 const { t } = useI18n()
 const store = useTablesStore()
-
-type Active = 'active' | 'inactive' | 'all'
-
-const filterOpts = computed<SegmentedOption[]>(() => [
-  { value: 'all', label: t.value.flt_all },
-  { value: 'active', label: t.value.flt_active },
-  { value: 'inactive', label: t.value.flt_inactive },
-])
 
 const query = ref('')
 
@@ -36,8 +28,8 @@ const query = ref('')
 // відфільтрованим батьком піднімається в корінь — orphan-hoisting у buildTree).
 const filtered = computed<TCProject[]>(() => {
   let list = store.tcProjects
-  if (store.tcActive === 'active') list = list.filter((p) => p.is_sync)
-  else if (store.tcActive === 'inactive') list = list.filter((p) => !p.is_sync)
+  if (store.tcActive === 'synced') list = list.filter((p) => p.is_sync)
+  else if (store.tcActive === 'unsynced') list = list.filter((p) => !p.is_sync)
 
   const q = query.value.trim().toLowerCase()
   if (q) {
@@ -52,10 +44,6 @@ const filtered = computed<TCProject[]>(() => {
 })
 
 const flat = computed(() => flattenTree(buildTree(filtered.value)))
-
-function onFilter(v: string): void {
-  store.tcActive = v as Active
-}
 
 function colorVar(c: string | null): Record<string, string> {
   const safe = safeColor(c)
@@ -75,12 +63,7 @@ onMounted(() => {
 <template>
   <div class="tct-wrap">
     <div class="tct-bar">
-      <Segmented
-        :model-value="store.tcActive"
-        :options="filterOpts"
-        size="sm"
-        @update:model-value="onFilter"
-      />
+      <SyncFilter :model-value="store.tcActive" @update:model-value="store.tcActive = $event" />
       <span class="spacer" />
       <label class="tct-search">
         <Icon name="search" :size="15" />
@@ -120,10 +103,7 @@ onMounted(() => {
         <span class="spacer" />
 
         <Badge v-if="n.item.is_archived" tone="neutral" soft>{{ t.col_archived }}</Badge>
-        <span class="tct__state" :class="{ 'is-on': n.item.is_sync }">
-          <span class="tct__statedot" />
-          {{ n.item.is_sync ? t.sync_state_on : t.sync_state_off }}
-        </span>
+        <SyncState :synced="n.item.is_sync" />
         <IconBtn name="settings" size="sm" :title="t.settings" @click="openSettings(n.item)" />
       </div>
     </div>

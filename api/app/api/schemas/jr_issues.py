@@ -27,3 +27,10 @@ class JRIssueItem(BaseModel):
     def active(self) -> bool:
         """`True`, якщо `status` не в «done»-сеті (похідне, для тьмяності в UI)."""
         return is_issue_active(self.status)
+
+
+class JRIssuesPage(BaseModel):
+    """Сторінкована відповідь `GET /jr-issues` (прецедент `TCEntriesResponse`)."""
+
+    items: list[JRIssueItem]
+    total: int

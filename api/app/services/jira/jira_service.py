@@ -21,84 +21,131 @@ class JiraService:
         return results
 
     def search_issues(self, keys: List[str]) -> List[JiraIssueDTO]:
-        jql_keys = 'key in ({})'.format(','.join(keys))
-        data = {
-            'jql': jql_keys
-        }
-        search_request: dict[str, Any] = self._make_request('api/2/search', method='POST', data=data)
-
-        issues: list[dict[str, Any]] = search_request.get('issues')
-        if issues is None:
+        """Задачі Jira за списком ключів (JQL `key in (…)`), з пагінацією."""
+        if not keys:
             return []
+        jql_keys = 'key in ({})'.format(','.join(keys))
+        return self._search(jql_keys)
 
-        results = []
-        for issue in issues:
-            fields: dict | None = issue.get('fields')
-            if fields is None:
-                continue
+    def search_issues_by_projects(
+        self,
+        project_keys: List[str],
+        *,
+        updated_from: str | None = None,
+        updated_to: str | None = None,
+        page_size: int = 100,
+    ) -> List[JiraIssueDTO]:
+        """Задачі заданих проектів (JQL `project in (…)`) з пагінацією.
 
-            project = None
-            project_field: dict = fields.get('project')
-            if project_field is not None:
-                project = JiraProjectDTO(
-                    id=project_field.get('id'),
-                    key=project_field.get('key'),
-                    name=project_field.get('name'),
-                )
+        На відміну від `search_issues` (за ключами), тягне задачі проектів
+        незалежно від worklog-ів і assignee/reporter. Якщо задано
+        `updated_from`/`updated_to` (рядки `YYYY-MM-DD`) — обмежує **періодом
+        активності** за полем `updated` (задачі, з якими працювали у вікні),
+        незалежно від дати створення.
+        """
+        if not project_keys:
+            return []
+        quoted = ','.join('"{}"'.format(k.replace('"', '')) for k in project_keys)
+        clauses = ['project in ({})'.format(quoted)]
+        if updated_from:
+            clauses.append('updated >= "{}"'.format(updated_from))
+        if updated_to:
+            # «23:59», щоб увесь кінцевий день потрапив у вікно (JQL date → 00:00).
+            clauses.append('updated <= "{} 23:59"'.format(updated_to))
+        jql = ' AND '.join(clauses) + ' ORDER BY updated DESC'
+        return self._search(jql, page_size=page_size)
 
-            creator = None
-            creator_field: dict = fields.get('creator')
-            if project_field is not None:
-                creator = JiraUserDTO(
-                    key=creator_field.get('key'),
-                    name=creator_field.get('name'),
-                    full_name=creator_field.get('displayName'),
-                    email=creator_field.get('emailAddress'),
-                )
+    def _search(self, jql: str, *, page_size: int | None = None) -> List[JiraIssueDTO]:
+        """JQL-пошук `api/2/search` із пагінацією (`startAt`/`maxResults`).
 
-            reporter = None
-            reporter_field: dict = fields.get('reporter')
-            if project_field is not None:
-                reporter = JiraUserDTO(
-                    key=reporter_field.get('key'),
-                    name=reporter_field.get('name'),
-                    full_name=reporter_field.get('displayName'),
-                    email=reporter_field.get('emailAddress'),
-                )
+        Цикл триває, доки зібрано всі задачі: спиняється і за досягненням `total`,
+        і за порожньою/неповною сторінкою (подвійний захист від нескінченного
+        циклу та від збою `_make_request`, що повертає `{}`).
+        """
+        results: List[JiraIssueDTO] = []
+        start_at = 0
+        while True:
+            data: dict[str, Any] = {'jql': jql, 'startAt': start_at}
+            if page_size is not None:
+                data['maxResults'] = page_size
+            resp = self._make_request('api/2/search', method='POST', data=data)
 
-            issue_dto = JiraIssueDTO(
-                id=issue.get('id'),
+            issues = resp.get('issues') if isinstance(resp, dict) else None
+            if not issues:
+                break
+            for issue in issues:
+                dto = self._parse_issue(issue)
+                if dto is not None:
+                    results.append(dto)
 
-                key=issue.get('key'),
-                name=fields.get('summary'),
+            start_at += len(issues)
+            if start_at >= int(resp.get('total', 0) or 0):
+                break
+            if page_size is not None and len(issues) < page_size:
+                break
+        return results
 
-                jr_project_id=project.id if project is not None else None,
+    @staticmethod
+    def _parse_issue(issue: dict[str, Any]) -> JiraIssueDTO | None:
+        """`issue` (dict із Jira) → `JiraIssueDTO`; `None`, якщо немає `fields`.
 
-                epic_key=fields.get('customfield_10005', None),
-                parent_key=fields.get('parent', {}).get('key', None),
+        Null-safe: відсутні `project`/`creator`/`reporter`/`parent` тощо не валять
+        парсинг (важливо для повного витягу проекту, де поля різняться).
+        """
+        fields: dict | None = issue.get('fields')
+        if fields is None:
+            return None
 
-                type=fields.get('issuetype', {}).get('name', 'Task'),
-                priority=fields.get('priority', {}).get('name', 'Medium'),
-                status=fields.get('status', {}).get('name', 'To DO'),
-
-                jr_creator_key=creator.key if creator is not None else None,
-                jr_reporter_key=reporter.key if reporter is not None else None,
-
-                estimate_plan=fields.get('timeoriginalestimate', 0),
-                estimate_fact=fields.get('aggregateprogress', {}).get('progress', 0),
-                estimate_rest=fields.get('aggregatetimeestimate', 0),
-
-                created_at=fields.get('created'),
-                updated_at=fields.get('updated'),
-
-                project=project,
-                creator=creator,
-                reporter=reporter,
+        project = None
+        project_field: dict | None = fields.get('project')
+        if project_field is not None:
+            project = JiraProjectDTO(
+                id=project_field.get('id'),
+                key=project_field.get('key'),
+                name=project_field.get('name'),
             )
 
-            results.append(issue_dto)
+        creator = None
+        creator_field: dict | None = fields.get('creator')
+        if creator_field is not None:
+            creator = JiraUserDTO(
+                key=creator_field.get('key'),
+                name=creator_field.get('name'),
+                full_name=creator_field.get('displayName'),
+                email=creator_field.get('emailAddress'),
+            )
 
-        return results
+        reporter = None
+        reporter_field: dict | None = fields.get('reporter')
+        if reporter_field is not None:
+            reporter = JiraUserDTO(
+                key=reporter_field.get('key'),
+                name=reporter_field.get('name'),
+                full_name=reporter_field.get('displayName'),
+                email=reporter_field.get('emailAddress'),
+            )
+
+        return JiraIssueDTO(
+            id=issue.get('id'),
+            key=issue.get('key'),
+            name=fields.get('summary'),
+            jr_project_id=project.id if project is not None else None,
+            epic_key=fields.get('customfield_10005', None),
+            parent_key=(fields.get('parent') or {}).get('key'),
+            type=(fields.get('issuetype') or {}).get('name', 'Task'),
+            priority=(fields.get('priority') or {}).get('name', 'Medium'),
+            status=(fields.get('status') or {}).get('name', 'To DO'),
+            jr_creator_key=creator.key if creator is not None else None,
+            jr_reporter_key=reporter.key if reporter is not None else None,
+            estimate_plan=fields.get('timeoriginalestimate', 0),
+            estimate_fact=(fields.get('aggregateprogress') or {}).get('progress', 0),
+            estimate_rest=fields.get('aggregatetimeestimate', 0),
+            created_at=fields.get('created'),
+            updated_at=fields.get('updated'),
+            project=project,
+            creator=creator,
+            reporter=reporter,
+        )
 
     def serch_worklogs_by_user(self, start: datetime, finish: datetime, user_key: str) -> List[JiraWorklogDTO]:
         data = {

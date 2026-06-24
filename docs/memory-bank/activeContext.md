@@ -1,7 +1,121 @@
 # Active Context
 
+## Заархівована зміна: `rework-jira-issues-screen` (2026-06-23)
+
+**Реалізовано і заархівовано 2026-06-23 (24/24; браузерний QA підтверджено
+користувачем — «все працює»). Дельти злиті в `openspec/specs/`: `api-jira-read`
+(MODIFIED «Список Jira-задач» → `updated`-вісь+пагінація, ADDED «Перелік статусів
+Jira-задач»), `frontend-data-tables` (MODIFIED «Екран Jira»). `npm run build`
+чисто; `validate --strict` OK.** Тека —
+[`archive/2026-06-23-rework-jira-issues-screen/`](../../openspec/changes/archive/2026-06-23-rework-jira-issues-screen/).
+Дзеркало `rework-timecamp-entries-screen` на екран **`/jira`** (задачі): читати
+**лише з локальної БД**, авто-синк при відкритті (`autoSyncIssues`) **прибрано**,
+**явна** кнопка синку, фільтри (проект / статус / пошук за назвою), фільтр за
+**періодом активності** (`updated_at` — пост-QA пивот із `created_at`; той самий
+`PeriodPicker`, дефолт екрана — поточний рік) і серверна пагінація. Порядок колонок
+— **проект → тип → статус → номер (`key`) → опис**. Синк (одна кнопка-попап) тепер
+виконує **витяг задач за період** (`POST /sync/jira/issues-all`, зміна
+`add-jira-full-issue-pull`), а **не** projects+worklogs. На цьому екрані
+`SyncState`/`SyncFilter` **не** застосовуються (немає бінарного стану синку —
+браузер задач). **Без alembic** (head `10b7dc50b00f`).
+
+**Реалізація:**
+- **Backend (`api/`):** новий спільний `app/api/period.py` (`current_month` /
+  `period_or_400`, винесено зі `sync_status.py` — той тепер імпортує через alias);
+  `schemas/jr_issues.py` — обгортка `JRIssuesPage { items, total }`;
+  `dao/jr_issues_dao.py` — `list_paginated` (фільтри період/`project_id`/`status`/
+  `q`, фільтр/сорт за `updated_at DESC NULLS LAST`, `limit`/`offset` + окремий
+  `COUNT`) і `distinct_statuses`; `routers/jr_issues.py` — `GET /jr-issues` →
+  `response_model=JRIssuesPage` (params `updated_from`/`updated_to`, дефолт —
+  поточний місяць, кап `limit`≤200) + новий `GET /jr-issues/statuses`. **BREAKING**
+  контракт `GET /jr-issues`
+  (плоский список → `{ items, total }`). OpenAPI на живому контейнері підтверджує
+  новий шейп; 401-гейт ок.
+- **Frontend (`front/`):** `api/types.ts` (`JRIssuesPage`); `api/client.ts`
+  (`jrIssues` → `JRIssuesPage` з `updatedFrom`/`updatedTo`/`status`/`offset`;
+  новий `jrIssueStatuses`); `stores/tables.ts`
+  (стан `jrPeriod`/`jrStatus`/`jrProjectFilter`/`jrQuery`/`jrOffset`/`jrTotal`/
+  `jrStatusOptions` + `loadJrIssues`/сетери з reset пагінації; **видалено**
+  `autoSyncIssues`/`loadIssues`); новий
+  `components/data/FilterSelect.vue` (поповер за патерном `Menu.vue`, `searchable`-
+  проп, опція «усі»); `components/jira/SyncIssuesModal.vue` (попап витягу задач за
+  період); переписаний `views/JiraView.vue` на `DataPage` (тулбар:
+  `PeriodPicker` + 2 `FilterSelect` + пошук; пагінація; одна кнопка-попап); i18n
+  (UK+EN); CSS `.fsel*`/`.jrbar` у `data.css`.
+- **Рішення користувача (мапінг-select):** `jrIssueSearch` шукає серед **усіх**
+  задач — передає широкий період (`updatedFrom='2000-01-01'`,
+  `updatedTo='2999-12-31'`); задачі з `NULL updated_at` у пошук не потраплять.
+
+**Пост-QA рефінмент (фідбек користувача наживо):** (1) випадайка фільтра проекту —
+**лише відстежувані** (`is_watched`), бо за несинкованими проектами фільтрувати
+сенсу немає; (2) **дефолт періоду екрана** змінено з «поточний місяць» на
+**«поточний рік»** (`defaultIssuePeriod`) + додано пресет «Цей рік» у `PeriodPicker`
+— місяць виявився завузьким для браузера задач; (3) фікс `FilterSelect`: пункти —
+`flex: none` (у скрольному `flex-column` флекс стискав їх до кількох px). Спека
+`frontend-data-tables` і `design.md` (D3/D5) оновлені; `validate --strict` OK,
+`npm run build` чисто.
+
+**Важливе про покриття даних (зʼясовано на QA, джерело плутанини):** `jr_issues`
+наповнюється **лише як побічний ефект синку worklog-ів** (`update_worklog →
+update_jira_issues`) + точкового синку за ключами — це **НЕ** повний витяг усіх
+задач із Jira. Тож локально є тільки задачі, на які синкнулись worklog-и (звідси й
+не-заасайнені на користувача задачі), а створені-але-не-залогані задачі локально
+відсутні (на момент QA — 300 задач: 2024→91, 2025→161, 2026→46; `created_at` усюди
+не-NULL; закриті `Готово`=212 присутні, фільтр їх не ховає). Жодна зміна фільтра
+цього не виправить — дані треба спершу синкнути. **→ Заскоуплено окремою зміною
+[`add-jira-full-issue-pull`](#активна-зміна-openspec-add-jira-full-issue-pull-proposal)**
+(див. нижче).
+
+Деталі (рішення) — `design.md` (D1–D9) у теці архіву.
+
+## Заархівована зміна: `add-jira-full-issue-pull` (2026-06-23)
+
+**Реалізовано і заархівовано 2026-06-23 (16/16; браузерний QA підтверджено
+користувачем — «все працює»). Дельти злиті в `openspec/specs/` (ADDED): 
+`api-sync-triggers` («Повний синк задач Jira…» → `POST /sync/jira/issues-all`),
+`frontend-data-tables` («Витяг задач Jira за період активності»). `validate --strict`
+OK.** Тека —
+[`archive/2026-06-23-add-jira-full-issue-pull/`](../../openspec/changes/archive/2026-06-23-add-jira-full-issue-pull/).
+Наслідок QA `rework-jira-issues-screen`:
+`jr_issues` наповнюється лише задачами з Tempo-worklog-ів, тож «звичайні»/не-
+залогані/не-заасайнені задачі локально відсутні. Ця зміна додає **витяг задач
+відстежуваних проектів** (`is_watched`) **за період активності** (`updated`).
+
+**Реалізація:**
+- **Backend (`api/`):** `JiraService` — спільний `_parse_issue` (з фіксом бага
+  `creator`/`reporter` + null-safety), пагінований `_search(jql, page_size)`
+  (`startAt`/`maxResults`; навіть key-based `search_issues` тепер пагінує),
+  публічний `search_issues_by_projects(keys, updated_from, updated_to)` (JQL
+  `project in ("KEY",…) AND updated >= … AND updated <= "… 23:59" ORDER BY updated
+  DESC`); `JRProjectDAO.watched_keys(db)`;
+  `UpdateJiraTask.update_issues_for_watched_projects(updated_from, updated_to)`
+  (watched-ключі → витяг → upsert `JRIssuesDAO.sync_by_key`, не full-replace;
+  повертає к-сть); `routers/sync_triggers.py` — `_do_jr_issues_all(payload)`
+  + `POST /sync/jira/issues-all` (опційний `PeriodBody`, run_job, опц.
+  `background`). Без alembic.
+- **Frontend (`front/`):** `api.syncJrIssuesAll(period)`; стор-дія
+  `syncJrIssuesAll(period)` (виклик → reload `loadJrIssues`; помилку кидає, щоб
+  попап показав); **єдина** кнопка синку у `#actions` `JiraView` (`cloudDown`) →
+  відкриває `SyncIssuesModal` (`PeriodPicker`) → витяг за період. (Окрему
+  `cloudDown`-кнопку прямого витягу й period-worklog-потік `syncJrIssues`
+  **прибрано** — звели в одну дію.) i18n `jr_sync`/`jrsync_*` (UK+EN).
+- **Рішення:** період — **за `updated`** (активність), не `created`/«все» — синк і
+  екран показують те, з чим працювали у вікні; без фільтра за worker_key/assignee
+  (тягнемо й чужі задачі); скоуп — лише watched-проекти; період береться з **попапа**;
+  дельти additive (ADDED-вимоги до `api-sync-triggers` + `frontend-data-tables`).
+
+Деталі (рішення) — `design.md` (D1–D7) у теці архіву.
+
 ## Дата оновлення
 
+2026-06-23 — **зміни `rework-jira-issues-screen` і `add-jira-full-issue-pull`
+заархівовано** (обидві — браузерний QA підтверджено користувачем). Екран `/jira`:
+читання з локальної БД за період **активності** (`updated_at`, дефолт — поточний
+рік), фільтри (проект `is_watched` / статус / пошук) + серверна пагінація + **одна**
+кнопка-попап, що тягне з Jira всі задачі watched-проектів, активні в періоді
+(`POST /sync/jira/issues-all`, JQL `updated`, без фільтра за користувачем). 4 дельти
+злиті в `openspec/specs/`: `api-jira-read` (MODIFIED+ADDED), `api-sync-triggers`
+(ADDED), `frontend-data-tables` (MODIFIED+ADDED). Деталі — нижче.
 2026-06-23 — **зміну `rework-timecamp-entries-screen` заархівовано** (27/27 задач;
 браузерний QA підтверджено користувачем). Дельти злиті в `openspec/specs/`:
 `api-sync-status` (ADDED `GET /tc-entries`), `frontend-data-tables` (MODIFIED

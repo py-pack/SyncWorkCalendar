@@ -1,8 +1,5 @@
-# api-jira-read Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change add-data-screens. Update Purpose after archive.
-## Requirements
 ### Requirement: Список Jira-задач
 
 Система SHALL надавати `GET /jr-issues`, що повертає збережені `jr_issues` за
@@ -90,22 +87,7 @@ TBD - created by archiving change add-data-screens. Update Purpose after archive
 - **WHEN** клієнт `GET /jr-issues` без `Authorization`
 - **THEN** відповідь `401 Unauthorized`
 
-### Requirement: Тогл `is_watched` для Jira-проекту
-
-Система SHALL надавати `PATCH /jr-projects/{id}`, що змінює локальний прапор
-`is_watched`. Відсутній `id` → `404`. Інші поля проекту (синхронізовані з
-Jira) через цей endpoint MUST NOT змінюватися.
-
-#### Scenario: Увімкнення відстеження
-
-- **WHEN** клієнт `PATCH /jr-projects/{id}` із `is_watched=true`
-- **THEN** відповідь `200 OK`; наступний `GET /jr-projects` повертає проект
-  із `is_watched=true`
-
-#### Scenario: Відсутній проект
-
-- **WHEN** клієнт `PATCH /jr-projects/{id}` для неіснуючого `id`
-- **THEN** відповідь `404 Not Found`
+## ADDED Requirements
 
 ### Requirement: Перелік статусів Jira-задач
 
@@ -124,4 +106,3 @@ Jira) через цей endpoint MUST NOT змінюватися.
 
 - **WHEN** клієнт `GET /jr-issues/statuses` без `Authorization`
 - **THEN** відповідь `401 Unauthorized`
-

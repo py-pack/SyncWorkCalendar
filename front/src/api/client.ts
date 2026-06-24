@@ -21,7 +21,7 @@ import {
   type CurrentUserResponse,
   type GoogleAuthPayload,
   type HealthResponse,
-  type JRIssue,
+  type JRIssuesPage,
   type JRProject,
   type JRProjectPatch,
   type Period,
@@ -208,11 +208,33 @@ export const api = {
     return request<JRProject>(`/jr-projects/${id}`, jsonBody(body, 'PATCH'))
   },
 
-  /** GET /jr-issues — задачі Jira з локальної БД; фільтр за проектом / пошук. */
-  jrIssues(params?: { projectId?: number; q?: string; limit?: number }): Promise<JRIssue[]> {
-    return request<JRIssue[]>(
-      `/jr-issues${qs({ project_id: params?.projectId, q: params?.q, limit: params?.limit })}`,
+  /** GET /jr-issues — задачі Jira з локальної БД за період створення (пагінація).
+   *  Фільтри: проект / статус / пошук; період активності `updatedFrom`/`updatedTo`. */
+  jrIssues(params?: {
+    projectId?: number
+    status?: string
+    q?: string
+    updatedFrom?: string
+    updatedTo?: string
+    limit?: number
+    offset?: number
+  }): Promise<JRIssuesPage> {
+    return request<JRIssuesPage>(
+      `/jr-issues${qs({
+        project_id: params?.projectId,
+        status: params?.status,
+        q: params?.q,
+        updated_from: params?.updatedFrom,
+        updated_to: params?.updatedTo,
+        limit: params?.limit,
+        offset: params?.offset,
+      })}`,
     )
+  },
+
+  /** GET /jr-issues/statuses — усі наявні статуси задач (для випадайки фільтра). */
+  jrIssueStatuses(): Promise<string[]> {
+    return request<string[]>('/jr-issues/statuses')
   },
 
   /** POST /sync/jira/projects — синк проектів Jira. */
@@ -223,6 +245,17 @@ export const api = {
   /** POST /sync/jira/issues — точковий синк задач за ключами. */
   syncJrIssues(keys: string[]): Promise<SyncTriggerResult> {
     return request<SyncTriggerResult>('/sync/jira/issues', jsonBody({ keys }))
+  },
+
+  /** POST /sync/jira/worklogs — тягнути worklog-и за період (задачі — побічно). */
+  syncJrWorklogs(period: Period): Promise<SyncTriggerResult> {
+    return request<SyncTriggerResult>('/sync/jira/worklogs', jsonBody(period))
+  },
+
+  /** POST /sync/jira/issues-all — витяг задач відстежуваних проектів, активних
+   *  у періоді (`updated`), незалежно від worklog-ів і assignee. */
+  syncJrIssuesAll(period: Period): Promise<SyncTriggerResult> {
+    return request<SyncTriggerResult>('/sync/jira/issues-all', jsonBody(period))
   },
 
   // --- Tempo / worklog sync tasks ------------------------------------------

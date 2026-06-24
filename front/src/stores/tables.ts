@@ -21,7 +21,7 @@ import {
   type WorklogStatus,
   type WorklogSyncTask,
 } from '@/api/types'
-import { defaultReviewPeriod, reviewPeriod, syncPeriod } from '@/lib/period'
+import { defaultIssuePeriod, defaultReviewPeriod, reviewPeriod, syncPeriod } from '@/lib/period'
 
 function errMsg(e: unknown): string {
   if (e instanceof ApiError) return e.detail
@@ -46,11 +46,24 @@ export const useTablesStore = defineStore('tables', () => {
   const tcOffset = ref(0)
   const tcTotal = ref(0)
   const tcLoading = ref(false)
-  // Jira
+  // Jira проекти (екран «Проекти»)
   const jrProjects = ref<JRProject[]>([])
   const jrProjectsLoaded = ref(false)
   const jrActive = ref<SyncTri>('all') // фільтр за станом синку (is_watched)
+  // Jira задачі (екран /jira): читання з БД за період СТВОРЕННЯ + фільтри
+  // (проект / статус / пошук) + серверна пагінація. Авто-синку немає — лише
+  // явна кнопка (rework-jira-issues-screen, D1).
+  const JR_PAGE_SIZE = 50
   const jrIssues = ref<JRIssue[]>([])
+  const jrPeriod = ref<Period>(defaultIssuePeriod()) // дефолт — «цей рік» (фідбек QA)
+  const jrStatus = ref<string | null>(null)
+  const jrProjectFilter = ref<number | null>(null)
+  const jrQuery = ref('')
+  const jrOffset = ref(0)
+  const jrTotal = ref(0)
+  const jrLoading = ref(false)
+  const jrStatusOptions = ref<string[]>([]) // наповнюється раз із /jr-issues/statuses
+  const jrStatusLoaded = ref(false)
   // Tempo / worklog sync tasks
   const wst = ref<WorklogSyncTask[]>([])
   const wstSummary = ref<Record<WorklogStatus, number> | null>(null)
@@ -131,20 +144,78 @@ export const useTablesStore = defineStore('tables', () => {
     return loadTcEntries()
   }
 
-  /** Екран Jira: задачі + проекти Jira (потрібні для кольорового тегу задачі).
-   *  `limit: 50` — стеля контракту `/jr-issues` (дефолт 10 — для select-а). */
-  async function loadIssues(): Promise<void> {
-    error.value = null
+  /** Випадайка статусів — наповнюється раз (усі наявні статуси з БД).
+   *  Помилка не блокує екран (випадайка просто лишиться порожньою). */
+  async function loadJrStatuses(): Promise<void> {
+    if (jrStatusLoaded.value) return
     try {
-      const [issues, projects] = await Promise.all([
-        api.jrIssues({ limit: 50 }),
-        api.jrProjects(),
-      ])
-      jrIssues.value = issues
-      jrProjects.value = projects
+      jrStatusOptions.value = await api.jrIssueStatuses()
+      jrStatusLoaded.value = true
+    } catch {
+      /* випадайка статусів лишиться порожньою — таблицю не блокуємо */
+    }
+  }
+
+  /** Екран /jira: задачі з локальної БД за поточний період/фільтри/сторінку
+   *  (`GET /jr-issues`). Жодного синку — лише читання (D1). Випадайки проекту й
+   *  статусу наповнюються раз, паралельно з першою сторінкою. */
+  async function loadJrIssues(): Promise<void> {
+    error.value = null
+    jrLoading.value = true
+    if (!jrProjectsLoaded.value) void loadJrProjects()
+    if (!jrStatusLoaded.value) void loadJrStatuses()
+    try {
+      const res = await api.jrIssues({
+        updatedFrom: jrPeriod.value.start,
+        updatedTo: jrPeriod.value.end,
+        projectId: jrProjectFilter.value ?? undefined,
+        status: jrStatus.value ?? undefined,
+        q: jrQuery.value || undefined,
+        limit: JR_PAGE_SIZE,
+        offset: jrOffset.value,
+      })
+      jrIssues.value = res.items
+      jrTotal.value = res.total
     } catch (e) {
       error.value = errMsg(e)
+    } finally {
+      jrLoading.value = false
     }
+  }
+
+  /** Зміна періоду створення → скид на першу сторінку + reload. */
+  function setJrPeriod(p: Period): Promise<void> {
+    jrPeriod.value = p
+    jrOffset.value = 0
+    return loadJrIssues()
+  }
+
+  /** Зміна фільтра статусу (`null` — усі) → скид на першу сторінку + reload. */
+  function setJrStatus(s: string | null): Promise<void> {
+    jrStatus.value = s
+    jrOffset.value = 0
+    return loadJrIssues()
+  }
+
+  /** Зміна фільтра проекту (`null` — усі) → скид на першу сторінку + reload. */
+  function setJrProjectFilter(id: number | null): Promise<void> {
+    jrProjectFilter.value = id
+    jrOffset.value = 0
+    return loadJrIssues()
+  }
+
+  /** Зміна пошуку за назвою → скид на першу сторінку + reload. */
+  function setJrQuery(q: string): Promise<void> {
+    jrQuery.value = q
+    jrOffset.value = 0
+    return loadJrIssues()
+  }
+
+  /** Перехід сторінки (offset кламповано в межах [0, total)). */
+  function setJrOffset(offset: number): Promise<void> {
+    const max = Math.max(0, jrTotal.value - 1)
+    jrOffset.value = Math.min(Math.max(0, offset), max)
+    return loadJrIssues()
   }
 
   async function loadTempo(): Promise<void> {
@@ -170,9 +241,14 @@ export const useTablesStore = defineStore('tables', () => {
     tcProjects.value = tcProjects.value.map((x) => (x.id === updated.id ? updated : x))
   }
 
-  /** Пошук задач для select-а в попапі (до 10, з похідним `active`). */
+  /** Пошук задач для select-а мапінгу (до 10, з похідним `active`).
+   *  `GET /jr-issues` дефолтиться на поточний місяць — для мапінгу шукаємо
+   *  серед УСІХ задач, тож явно передаємо широкий період (рішення користувача).
+   *  Задачі з `NULL updated_at` у пошук не потраплять (відоме обмеження). */
   function jrIssueSearch(q: string): Promise<JRIssue[]> {
-    return api.jrIssues({ q, limit: 10 })
+    return api
+      .jrIssues({ q, limit: 10, updatedFrom: '2000-01-01', updatedTo: '2999-12-31' })
+      .then((r) => r.items)
   }
 
   /** Зберегти стан синку (`is_watched`) Jira-проекту з попапа (PATCH + локальне
@@ -215,31 +291,18 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  // ---- авто-синк із зовнішніх джерел при відкритті екрана ----
-  // Екран спершу показує дані з БД (load*), потім у фоні тягне свіже з Jira і
-  // перезавантажує. Захист від флуду: не пере-синкати, якщо синкали менш ніж
-  // SYNC_TTL_MS тому (швидка навігація туди-сюди).
-  //
-  // Лишилось лише для задач (Jira); ПРОЕКТИ і ЗАПИСИ TimeCamp авто-синку більше
-  // не мають — лише явні кнопки `syncProjects`/`syncTcEntries` (D1/D9).
-
-  // 5 хв: кожен синк створює api_jobs (needs_verification), тож не пере-синкаємо
-  // частіше — дані щонайбільше 5-хв давнини, без потоку job-ів на кожну навігацію.
-  const SYNC_TTL_MS = 5 * 60_000
-  const lastSync = { issues: 0 }
-
-  /** Екран Jira: re-sync відомих ключів задач (API лише point-by-key, D3). */
-  async function autoSyncIssues(): Promise<void> {
-    const now = Date.now()
-    if (now - lastSync.issues < SYNC_TTL_MS) return
-    lastSync.issues = now
+  /** Явний витяг задач Jira за обраний у попапі період (ніколи не авто, D1).
+   *  Тягне ВСІ задачі відстежуваних проектів, **активні** (`updated`) у періоді —
+   *  незалежно від worklog-ів і assignee/reporter (`POST /sync/jira/issues-all`).
+   *  Після успіху перезавантажує поточну сторінку списку з локальної БД. */
+  async function syncJrIssuesAll(period: Period): Promise<void> {
+    error.value = null
     try {
-      const keys = jrIssues.value.map((i) => i.key)
-      if (keys.length) await api.syncJrIssues(keys)
-      await loadIssues()
+      await api.syncJrIssuesAll(period)
+      await loadJrIssues()
     } catch (e) {
       error.value = errMsg(e)
-      lastSync.issues = 0
+      throw e // щоб попап синку показав помилку
     }
   }
 
@@ -275,6 +338,15 @@ export const useTablesStore = defineStore('tables', () => {
     jrProjectsLoaded,
     jrActive,
     jrIssues,
+    jrPeriod,
+    jrStatus,
+    jrProjectFilter,
+    jrQuery,
+    jrOffset,
+    jrTotal,
+    jrLoading,
+    jrStatusOptions,
+    jrPageSize: JR_PAGE_SIZE,
     wst,
     wstSummary,
     error,
@@ -285,13 +357,18 @@ export const useTablesStore = defineStore('tables', () => {
     setTcSyncFilter,
     setTcOffset,
     syncTcEntries,
-    loadIssues,
+    loadJrIssues,
+    setJrPeriod,
+    setJrStatus,
+    setJrProjectFilter,
+    setJrQuery,
+    setJrOffset,
+    syncJrIssuesAll,
     loadTempo,
     saveTcSync,
     jrIssueSearch,
     saveJrWatched,
     syncProjects,
-    autoSyncIssues,
     syncWstPrepare,
     syncWstResolve,
     syncWstPush,

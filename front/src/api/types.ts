@@ -140,6 +140,12 @@ export interface JRIssue {
   estimate_rest: number
 }
 
+/** Сторінкована відповідь GET /jr-issues (дзеркало `TCEntriesResponse`). */
+export interface JRIssuesPage {
+  items: JRIssue[]
+  total: number
+}
+
 // Tempo / worklog sync tasks ------------------------------------------------
 
 export interface WorklogSyncTask {

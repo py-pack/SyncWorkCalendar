@@ -1,11 +1,12 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date
 from typing import Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, or_, select
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user, get_db
+from app.api.period import current_month as _current_month, period_or_400 as _period_or_400
 from app.api.schemas.sync_status import (
     TCEntriesResponse,
     TCEntryItem,
@@ -18,21 +19,6 @@ from app.models import StatusTaskEnum, TCEntry, TCProject, WorklogSyncTask
 
 
 router = APIRouter()
-
-
-def _period_or_400(start: date, end: date) -> tuple[datetime, datetime]:
-    if start > end:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start must be <= end")
-    return datetime.combine(start, time.min), datetime.combine(end, time.max)
-
-
-def _current_month() -> tuple[date, date]:
-    """Поточний місяць [перше … останнє число] як дефолт без параметрів періоду."""
-    today = date.today()
-    first = today.replace(day=1)
-    # «28-й + 4 дні» гарантовано потрапляє в наступний місяць → його 1-ше число.
-    next_first = (first.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return first, next_first - timedelta(days=1)
 
 
 @router.get("/worklog-sync-tasks", response_model=WorklogSyncTasksResponse)

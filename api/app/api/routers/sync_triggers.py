@@ -125,6 +125,17 @@ async def _do_jr_issues(payload: dict[str, Any]) -> dict[str, Any]:
     return {"requested": len(keys), "present": after}
 
 
+async def _do_jr_issues_all(payload: dict[str, Any] | None) -> dict[str, Any]:
+    updated_from = payload.get("start") if payload else None
+    updated_to = payload.get("end") if payload else None
+    before = await _count(select(func.count()).select_from(JRIssue))
+    synced = await UpdateJiraTask().update_issues_for_watched_projects(
+        updated_from=updated_from, updated_to=updated_to
+    )
+    after = await _count(select(func.count()).select_from(JRIssue))
+    return {"synced": synced, "total": after, "delta": after - before}
+
+
 async def _do_jr_worklogs(payload: dict[str, Any]) -> dict[str, Any]:
     period_lo = datetime.combine(date.fromisoformat(payload["start"]), time.min)
     period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
@@ -255,6 +266,33 @@ async def sync_jira_issues(
         background=background,
         bg_tasks=bg_tasks,
         work=lambda: _do_jr_issues(payload),
+    )
+
+
+@router.post("/jira/issues-all")
+async def sync_jira_issues_all(
+    body: PeriodBody | None = Body(default=None),
+    background: bool = Query(default=False),
+    current: CurrentUser = Depends(get_current_user),
+    bg_tasks: BackgroundTasks = BackgroundTasks(),
+) -> JSONResponse:
+    """Витяг задач відстежуваних проектів (`is_watched`) у `jr_issues`.
+
+    На відміну від `/jira/issues` (точково за ключами) і `/jira/worklogs` (лише
+    задачі з worklog-ами), тягне задачі watched-проектів незалежно від assignee.
+    За наявності тіла `{start, end}` обмежує **періодом активності** (`updated`);
+    без тіла — усі задачі.
+    """
+    payload = (
+        {"start": body.start.isoformat(), "end": body.end.isoformat()} if body else None
+    )
+    return await _execute(
+        trigger_name="sync.jira.issues-all",
+        payload=payload,
+        created_by=current.username,
+        background=background,
+        bg_tasks=bg_tasks,
+        work=lambda: _do_jr_issues_all(payload),
     )
 
 

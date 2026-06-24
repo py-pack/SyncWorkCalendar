@@ -22,6 +22,47 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`add-jira-full-issue-pull`](../../openspec/changes/archive/2026-06-23-add-jira-full-issue-pull/)
+  — **заархівовано 2026-06-23 (16/16; браузерний QA підтверджено користувачем;
+  `validate --strict` OK; `npm run build` чисто). 2 дельти (ADDED) злиті в
+  `openspec/specs/`: `api-sync-triggers`, `frontend-data-tables`.**
+  Наслідок QA `rework-jira-issues-screen`: `jr_issues` має лише задачі з
+  Tempo-worklog-ів. Додає витяг задач відстежуваних проектів (`is_watched`) **за
+  період активності** (`updated`): пошук за JQL `project in (…) AND updated >= … AND
+  updated <= "… 23:59"` з пагінацією (новий `_search` + `search_issues_by_projects`;
+  +фікс бага `creator`/`reporter` у `JiraService`), `JRProjectDAO.watched_keys`,
+  `UpdateJiraTask.update_issues_for_watched_projects(updated_from, updated_to)`
+  (upsert через `sync_by_key`), тригер `POST /sync/jira/issues-all` (опційний
+  `PeriodBody`, run_job, опц. background), **єдина** кнопка-попап на `/jira`
+  (`SyncIssuesModal` із `PeriodPicker`). Без фільтра за worker_key/assignee (тягнемо
+  й чужі задачі). Без alembic. Рішення — `design.md` (D1–D7).
+
+- [`rework-jira-issues-screen`](../../openspec/changes/archive/2026-06-23-rework-jira-issues-screen/)
+  — **заархівовано 2026-06-23 (24/24; браузерний QA підтверджено користувачем;
+  `validate --strict` OK; `npm run build` чисто). Дельти злиті в `openspec/specs/`:
+  `api-jira-read` (MODIFIED «Список Jira-задач» + ADDED «Перелік статусів»),
+  `frontend-data-tables` (MODIFIED «Екран Jira»).**
+  Дзеркало `rework-timecamp-entries-screen` на екран `/jira` (задачі): читати лише
+  з локальної БД, авто-синк (`autoSyncIssues`) прибрано, явна кнопка синку, фільтри
+  (проект / статус / пошук за назвою) + фільтр за **періодом активності**
+  (`updated_at` — пост-QA пивот із `created_at`; `PeriodPicker`, дефолт екрана
+  поточний рік) + серверна пагінація. Порядок колонок — проект → тип → статус →
+  номер (`key`) → опис. Синк (одна кнопка-попап) виконує **витяг задач за період**
+  (`POST /sync/jira/issues-all`, зміна `add-jira-full-issue-pull`), а не
+  projects+worklogs. **BREAKING** `GET /jr-issues` → сторінкований `{ items, total }`
+  + `status`/`updated_from`/`updated_to`; новий facet `GET /jr-issues/statuses`. Без
+  alembic (head `10b7dc50b00f`). На екрані `SyncState`/`SyncFilter` не застосовуються
+  (немає бінарного стану синку). Backend: новий спільний `app/api/period.py`
+  (`current_month`/`period_or_400`, винесено зі `sync_status.py`), `JRIssuesPage`,
+  `JRIssuesDAO.list_paginated` (фільтр/сорт за `updated_at`) +`distinct_statuses`.
+  Frontend: `JRIssuesPage`-тип, `jrIssues`/`jrIssueStatuses` у клієнті, стан+дії Jira
+  у `tables.ts` (видалено `autoSyncIssues`/`loadIssues`), нові
+  `components/data/FilterSelect.vue` + `components/jira/SyncIssuesModal.vue`,
+  переписаний `JiraView` на `DataPage`, i18n, CSS. **Рішення користувача:**
+  мапінг-select (`jrIssueSearch`) шукає серед усіх задач — широкий період
+  (`2000-01-01…2999-12-31`); `NULL updated_at` не потрапляє. Рішення — `design.md`
+  (D1–D9).
+
 - [`rework-timecamp-entries-screen`](../../openspec/changes/archive/2026-06-23-rework-timecamp-entries-screen/)
   — **заархівовано 2026-06-23 (27/27; браузерний QA підтверджено користувачем).
   2 дельти злиті в `openspec/specs/` і канонічні: `api-sync-status` (ADDED

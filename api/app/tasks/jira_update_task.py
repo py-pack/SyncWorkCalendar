@@ -34,6 +34,35 @@ class UpdateJiraTask:
             service_jira_issue = JRIssuesDAO()
             await service_jira_issue.sync_by_key(db, jira_request)
 
+    async def update_issues_for_watched_projects(
+        self,
+        updated_from: str | None = None,
+        updated_to: str | None = None,
+    ) -> int:
+        """Витяг задач відстежуваних проектів (`is_watched`) у `jr_issues`.
+
+        На відміну від `update_worklog` (тягне лише задачі з worklog-ами за період),
+        тягне задачі watched-проектів за JQL `project in (…)` з пагінацією,
+        незалежно від assignee/reporter. За заданих `updated_from`/`updated_to`
+        (рядки `YYYY-MM-DD`) обмежує **періодом активності** (`updated`). Upsert
+        через `JRIssuesDAO.sync_by_key` (НЕ full-replace — задачі поза вибіркою не
+        видаляються). Повертає кількість синкнутих задач.
+        """
+        async with get_async_asession() as db:
+            project_keys = await JRProjectDAO.watched_keys(db)
+            if not project_keys:
+                return 0
+
+            issues = self.client.search_issues_by_projects(
+                project_keys, updated_from=updated_from, updated_to=updated_to
+            )
+            if not issues:
+                return 0
+
+            service = JRIssuesDAO()
+            await service.sync_by_key(db, issues)
+            return len(issues)
+
     async def update_worklog(
         self,
         start_time: datetime,

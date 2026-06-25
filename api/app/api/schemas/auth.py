@@ -36,3 +36,5 @@ class CurrentUserResponse(BaseModel):
     username: str
     worker_key: str | None
     expires_at: datetime
+    # Per-user перемикачі автосинку з дефолтами (відсутні ключі / NULL → false).
+    sync_prefs: dict[str, bool]

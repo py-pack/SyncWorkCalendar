@@ -22,6 +22,43 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`add-celery-auto-linking`](../../openspec/changes/add-celery-auto-linking/)
+  — **РЕАЛІЗОВАНА (2026-06-24; 32/32; `validate --strict` OK; бекенд-верифікація
+  наживо PASS; НЕ заархівована).** Backend/інфра: `Celery 5.6`+`Redis`+`beat` у
+  нових контейнерах `redis`/`worker`/`beat` (redis named volume, host-порт
+  **`11332`**; worker `--pool=prefork --max-tasks-per-child=100`). Async→Celery
+  місток `app/tasks/celery_bridge.py` (свіжий engine/loop на таску + спільне ядро
+  `api_jobs`-аудиту з `jobs_wrapper`: `create_job`/`run_existing_job`). 8 тасок +
+  2 beat-диспетчери (`app/tasks/celery_tasks.py`); beat `01:00` TimeCamp+Jira /
+  `01:30` Tempo (`app/celery_app.py`; таймзона `APP__CELERY__TIMEZONE`, дефолт
+  `UTC`), диспетчери поважають per-user `sync_prefs`. Авто-реконсиляція
+  (`ReconcileLinksTask`): upsert WST за `source_id` (`TCEntriesDAO.
+  get_match_candidates`), перелінк на зміну опису **без** авто-відлінку, дедуп
+  `JRWorklogDAO.find_match`, **активований** `created→pre_update→update→updated`
+  через `JiraService.update_worklog` (Tempo `PUT`); пуш гейтиться `auto_push_tempo`.
+  Per-user `api_users.sync_prefs` (JSONB nullable, дефолт `NULL`→`false`, opt-in;
+  хелпер `app/core/utils/sync_prefs.py`) + **alembic head `69dde0d17ff2`**
+  (застосовано). API: `sync_prefs` у `GET /auth/me`, `PATCH /users/me/sync-prefs`
+  (extra=forbid→422), `POST /sync/reconcile-links` (enqueue, 400 без `worker_key`),
+  важкі тригери `?background=true` → enqueue (а не `BackgroundTasks`). 2 нові
+  capability `async-task-queue`/`backend-auto-linking`; MODIFIED
+  `container-orchestration`/`api-sync-triggers`/`api-users-management`/`api-auth`.
+  Лишилось: фронт-перемикачі `sync_prefs` (зміна 2 `rework-tempo-screen`), архів +
+  git-commit. Деталі — `design.md` + `activeContext.md`.
+- [`rework-tempo-screen`](../../openspec/changes/rework-tempo-screen/)
+  — **proposal (2026-06-24; `validate --strict` OK; 0/25).** Екран `/tempo` під патерн
+  `DataPage`: дві вкладки (`jr_worklogs` / WST-конвеєр), `PeriodPicker`+`SyncFilter`+
+  **пошук за назвою**+пагінація, рядок показує номер **і назву** задачі (`issue_name`),
+  попап з описом дії, усі кнопки зверху, пер-рядкова дія замість чекбоксів
+  (`POST /sync/worklog-tasks/{id}/push`), кнопка «Забрати з Tempo». Новий read `GET
+  /jr-worklogs` + розширення `GET /worklog-sync-tasks` (пагінація/`synced`/`q`/
+  `issue_name`). Меню user-chip — **один** пункт «Профіль» → екран «Профіль» на двох
+  закладках (self-edit `PATCH /users/me` крім `email`/`is_active`; зміна пароля
+  `PATCH /users/me/password`; тумблери `sync_prefs`, дефолт вимкнено). Новий
+  `frontend-profile`; MODIFIED
+  `frontend-data-tables`/`api-sync-status`/`api-sync-triggers`/`api-users-management`/
+  `web-app-shell`. Споживає `sync_prefs` зі зміни вище.
+
 - [`add-jira-full-issue-pull`](../../openspec/changes/archive/2026-06-23-add-jira-full-issue-pull/)
   — **заархівовано 2026-06-23 (16/16; браузерний QA підтверджено користувачем;
   `validate --strict` OK; `npm run build` чисто). 2 дельти (ADDED) злиті в

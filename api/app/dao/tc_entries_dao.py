@@ -28,14 +28,25 @@ class TCEntriesDAO(BaseDAO):
     model = TCEntry
 
     @classmethod
-    async def sync_all_between(cls, db: AsyncSession, entries, date_from: datetime, date_to: datetime):
-        entries_db = (await db.execute(
-            select(cls.model).where(
-                and_(
-                    cls.model.start_at >= datetime.combine(date_from.date(), time.min),
-                    cls.model.start_at <= datetime.combine(date_to.date(), time.max),
+    async def sync_all_between(
+        cls, db: AsyncSession, entries, date_from: datetime, date_to: datetime
+    ):
+        entries_db = (
+            (
+                await db.execute(
+                    select(cls.model).where(
+                        and_(
+                            cls.model.start_at
+                            >= datetime.combine(date_from.date(), time.min),
+                            cls.model.start_at
+                            <= datetime.combine(date_to.date(), time.max),
+                        )
+                    )
                 )
-            ))).scalars().all()
+            )
+            .scalars()
+            .all()
+        )
 
         await cls._sync(db, entries, entries_db)
 
@@ -164,9 +175,7 @@ class TCEntriesDAO(BaseDAO):
         return list(rows), int(total)
 
     async def get_entries_for_worklogs(
-        self, db: AsyncSession,
-        date_from: datetime,
-        date_to: datetime
+        self, db: AsyncSession, date_from: datetime, date_to: datetime
     ) -> list[WorklogTaskDTO]:
         entries_query = await db.execute(
             select(
@@ -180,13 +189,19 @@ class TCEntriesDAO(BaseDAO):
             )
             .select_from(TCEntry)
             .join(TCProject, TCProject.id == TCEntry.tc_project_id)
-            .outerjoin(WorklogSyncTask, WorklogSyncTask.source_id == TCEntry.id)
-            .where(and_(
-                TCProject.is_sync == True,
-                WorklogSyncTask.source_id == None,
-                TCEntry.start_at >= datetime.combine(date_from.date(), time.min),
-                TCEntry.start_at <= datetime.combine(date_to.date(), time.max),
-            ))
+            .outerjoin(
+                WorklogSyncTask, WorklogSyncTask.source_id == TCEntry.id
+            )
+            .where(
+                and_(
+                    TCProject.is_sync == True,
+                    WorklogSyncTask.source_id == None,
+                    TCEntry.start_at
+                    >= datetime.combine(date_from.date(), time.min),
+                    TCEntry.start_at
+                    <= datetime.combine(date_to.date(), time.max),
+                )
+            )
         )
         entries = entries_query.mappings().all()
 
@@ -194,30 +209,101 @@ class TCEntriesDAO(BaseDAO):
         worker_key = settings.current_user
 
         for entry in entries:
-            if entry.meta and entry.meta.get('task'):
-                issue_key = entry.meta.get('task')
+            if entry.meta and entry.meta.get("task"):
+                issue_key = entry.meta.get("task")
             else:
                 issue_key = entry.issue_key
+
+            content = self._create_content_by_template(
+                entry.description, issue_key, entry.start_at, entry.end_at
+            )
+            result.append(
+                WorklogTaskDTO(
+                    status=StatusTaskEnum.pre_create,
+                    source_id=entry.id,
+                    worker_key=worker_key,
+                    issue_key=issue_key,
+                    content=content,
+                    started_at=entry.start_at,
+                    time_spent=entry.duration,
+                )
+            )
+
+        return result
+
+    async def get_match_candidates(
+        self,
+        db: AsyncSession,
+        worker_key: str,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> list[WorklogTaskDTO]:
+        """Кандидати реконсиляції: записи sync-проектів періоду, що матчаться.
+
+        На відміну від `get_entries_for_worklogs`:
+        - **не** виключає записи, для яких уже є `WorklogSyncTask` (потрібно для
+          перелінку при зміні опису);
+        - бере переданий `worker_key`, а не `settings.current_user`;
+        - повертає DTO **лише** для записів із розпізнаною задачею (`meta.task` →
+          fallback `tc_project.issue_key`). Записи без матчу пропускаються —
+          їхній наявний звʼязок реконсиляція не чіпає («не відлінковуємо», D4).
+        """
+        entries_query = await db.execute(
+            select(
+                TCEntry.id,
+                TCEntry.description,
+                TCEntry.meta,
+                TCEntry.start_at,
+                TCEntry.end_at,
+                TCEntry.duration,
+                TCProject.issue_key,
+            )
+            .select_from(TCEntry)
+            .join(TCProject, TCProject.id == TCEntry.tc_project_id)
+            .where(
+                and_(
+                    TCProject.is_sync == True,
+                    TCEntry.start_at
+                    >= datetime.combine(date_from.date(), time.min),
+                    TCEntry.start_at
+                    <= datetime.combine(date_to.date(), time.max),
+                )
+            )
+        )
+        entries = entries_query.mappings().all()
+
+        result: list[WorklogTaskDTO] = []
+        for entry in entries:
+            if entry.meta and entry.meta.get("task"):
+                issue_key = entry.meta.get("task")
+            else:
+                issue_key = entry.issue_key
+            if not issue_key:
+                continue
 
             content = self._create_content_by_template(
                 entry.description,
                 issue_key,
                 entry.start_at,
-                entry.end_at
+                entry.end_at,
             )
-            result.append(WorklogTaskDTO(
-                status=StatusTaskEnum.pre_create,
-                source_id=entry.id,
-                worker_key=worker_key,
-                issue_key=issue_key,
-                content=content,
-                started_at=entry.start_at,
-                time_spent=entry.duration,
-            ))
+            result.append(
+                WorklogTaskDTO(
+                    status=StatusTaskEnum.pre_create,
+                    source_id=entry.id,
+                    worker_key=worker_key,
+                    issue_key=issue_key,
+                    content=content,
+                    started_at=entry.start_at,
+                    time_spent=entry.duration,
+                )
+            )
 
         return result
 
-    def _create_content_by_template(self, content: str, key: str, start: datetime, end: datetime) -> str:
+    def _create_content_by_template(
+        self, content: str, key: str, start: datetime, end: datetime
+    ) -> str:
         content = content.replace(key, "").strip(" -")
 
         result = f"sync|{start.strftime("%H:%M")}|{end.strftime("%H:%M")}"

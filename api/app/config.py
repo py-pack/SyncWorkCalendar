@@ -43,6 +43,19 @@ class DatabaseConfig(BaseModel):
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
+class RedisConfig(BaseModel):
+    # Брокер черги Celery. У docker-compose сервіс зветься `redis`; локально без
+    # контейнера — `redis://localhost:11332/0` (host-порт за схемою TT-AA-S).
+    url: str = "redis://redis:6379/0"
+
+
+class CeleryConfig(BaseModel):
+    # Таймзона beat-розкладу (`Celery` `timezone`). Дефолт `UTC` (UTC+0); усі
+    # часи зберігаються й порівнюються в UTC. Часи самих тіків — фіксовані
+    # константи в коді (`app/celery_app.py`), не конфіг.
+    timezone: str = "UTC"
+
+
 class TimeCampConfig(BaseModel):
     token: str = "<PASSWORD>"
 
@@ -107,6 +120,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     db: DatabaseConfig = DatabaseConfig()
+    redis: RedisConfig = RedisConfig()
+    celery: CeleryConfig = CeleryConfig()
     tc: TimeCampConfig = TimeCampConfig()
     jira: JiraConfig = JiraConfig()
     api: APIConfig = APIConfig()

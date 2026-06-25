@@ -3,11 +3,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import hash_password
 from app.api.deps import CurrentUser, get_current_user, get_db
-from app.api.schemas.users import UserCreate, UserItem, UserPatch
+from app.api.schemas.users import (
+    SyncPrefs,
+    SyncPrefsPatch,
+    UserCreate,
+    UserItem,
+    UserPatch,
+)
+from app.core.utils.sync_prefs import merge_sync_prefs, normalize_sync_prefs
 from app.dao import APIUserDAO
 
 
 router = APIRouter()
+
+
+@router.patch("/me/sync-prefs", response_model=SyncPrefs)
+async def patch_my_sync_prefs(
+    body: SyncPrefsPatch,
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SyncPrefs:
+    """Часткове злиття власних `sync_prefs` (за JWT). Невідомі ключі → 422.
+
+    Прапори автосинку opt-in: відсутні ключі читаються як `false`. Авторитетні
+    для Celery-тасок і beat (capability `async-task-queue`).
+    """
+    user = await APIUserDAO.find(db, current.id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="user not found"
+        )
+
+    patch = body.model_dump(exclude_unset=True)
+    merged = merge_sync_prefs(user.sync_prefs, patch)
+    await APIUserDAO.update(db, user, sync_prefs=merged)
+    return SyncPrefs(**merged)
 
 
 @router.get("", response_model=list[UserItem])

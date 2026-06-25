@@ -6,15 +6,25 @@ invocation lands in ``api_jobs`` and goes through the
 defers execution to ``BackgroundTasks`` and returns ``202 Accepted`` with the
 job id; the caller polls ``GET /api-jobs/{id}``.
 """
+
 from datetime import date, datetime, time
 from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, get_current_user
-from app.api.jobs_wrapper import run_job
+from app.api.jobs_wrapper import create_job, run_job
+from app.api.period import current_month
 from app.api.schemas.sync_triggers import IssuesKeysBody, PeriodBody
 from app.core.db_helper import async_session_maker
 from app.dao import APIJobDAO
@@ -27,6 +37,7 @@ from app.models import (
     TCProject,
     WorklogSyncTask,
 )
+from app.tasks import celery_tasks
 from app.tasks.jira_update_task import UpdateJiraTask
 from app.tasks.time_camp_update_task import TimeCampUpdateTask
 from app.tasks.worllog_sync_task import WorllogSyncTask
@@ -36,6 +47,7 @@ router = APIRouter()
 
 
 _MISSING_WORKER_KEY = "user has no worker_key configured"
+_QUEUE_UNAVAILABLE = "task queue unavailable"
 
 
 async def _count(stmt) -> int:
@@ -51,14 +63,41 @@ async def _execute(
     background: bool,
     bg_tasks: BackgroundTasks,
     work: Callable[[], Awaitable[dict[str, Any] | None]],
+    enqueue: Callable[[str], Any] | None = None,
 ) -> JSONResponse:
-    if background:
-        async with async_session_maker() as session:
-            job = await APIJobDAO.create_running(
-                session, trigger_name=trigger_name, payload=payload, created_by=created_by
+    # Фоновий режим (`?background=true`): важкі тригери йдуть у **тривку чергу**
+    # Celery (`enqueue`), а не в ефемерні FastAPI BackgroundTasks (живуть лише в
+    # процесі api й не переживають рестарт). `api_jobs`-рядок створює тригер, щоб
+    # одразу повернути `job_id`; воркер закриває його (capability `async-task-queue`).
+    if background and enqueue is not None:
+        job_id = await create_job(
+            trigger_name=trigger_name, payload=payload, created_by=created_by
+        )
+        try:
+            enqueue(str(job_id))
+        except Exception as exc:
+            # Брокер недоступний → не «з'їдаємо» завдання тихо: позначаємо рядок
+            # failed і явно віддаємо помилку викликачеві (spec async-task-queue).
+            async with async_session_maker() as session:
+                await APIJobDAO.mark_failed(
+                    session, job_id, f"enqueue failed: {exc}"
+                )
+                await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=_QUEUE_UNAVAILABLE,
             )
-            await session.commit()
-            job_id = job.id
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={"job_id": str(job_id), "status": "queued"},
+        )
+
+    if background:
+        # Тригери без Celery-еквіваленту (точковий jr/issues, legacy WST-кроки) —
+        # лишаються на BackgroundTasks (зворотна сумісність).
+        job_id = await create_job(
+            trigger_name=trigger_name, payload=payload, created_by=created_by
+        )
 
         async def _bg() -> None:
             try:
@@ -69,7 +108,9 @@ async def _execute(
                     await session.commit()
                 return
             async with async_session_maker() as session:
-                await APIJobDAO.mark_needs_verification(session, job_id, result)
+                await APIJobDAO.mark_needs_verification(
+                    session, job_id, result
+                )
                 await session.commit()
 
         bg_tasks.add_task(_bg)
@@ -78,7 +119,9 @@ async def _execute(
             content={"job_id": str(job_id), "status": "running"},
         )
 
-    async with run_job(trigger_name=trigger_name, payload=payload, created_by=created_by) as ctx:
+    async with run_job(
+        trigger_name=trigger_name, payload=payload, created_by=created_by
+    ) as ctx:
         ctx.result = await work()
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -92,6 +135,7 @@ async def _execute(
 
 # ---- task helpers --------------------------------------------------------
 
+
 async def _do_tc_projects() -> dict[str, Any]:
     before = await _count(select(func.count()).select_from(TCProject))
     await TimeCampUpdateTask().update_project()
@@ -100,12 +144,18 @@ async def _do_tc_projects() -> dict[str, Any]:
 
 
 async def _do_tc_entries(payload: dict[str, Any]) -> dict[str, Any]:
-    period_lo = datetime.combine(date.fromisoformat(payload["start"]), time.min)
+    period_lo = datetime.combine(
+        date.fromisoformat(payload["start"]), time.min
+    )
     period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
     where = (TCEntry.start_at >= period_lo) & (TCEntry.start_at <= period_hi)
-    before = await _count(select(func.count()).select_from(TCEntry).where(where))
+    before = await _count(
+        select(func.count()).select_from(TCEntry).where(where)
+    )
     await TimeCampUpdateTask().update_entries(period_lo, period_hi)
-    after = await _count(select(func.count()).select_from(TCEntry).where(where))
+    after = await _count(
+        select(func.count()).select_from(TCEntry).where(where)
+    )
     return {"total": after, "delta": after - before}
 
 
@@ -137,31 +187,46 @@ async def _do_jr_issues_all(payload: dict[str, Any] | None) -> dict[str, Any]:
 
 
 async def _do_jr_worklogs(payload: dict[str, Any]) -> dict[str, Any]:
-    period_lo = datetime.combine(date.fromisoformat(payload["start"]), time.min)
+    period_lo = datetime.combine(
+        date.fromisoformat(payload["start"]), time.min
+    )
     period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
     worker = payload["worker_key"]
-    where = (JRWorklog.started_at >= period_lo) & (JRWorklog.started_at <= period_hi)
-    before = await _count(select(func.count()).select_from(JRWorklog).where(where))
+    where = (JRWorklog.started_at >= period_lo) & (
+        JRWorklog.started_at <= period_hi
+    )
+    before = await _count(
+        select(func.count()).select_from(JRWorklog).where(where)
+    )
     await UpdateJiraTask().update_worklog(period_lo, period_hi, worker=worker)
-    after = await _count(select(func.count()).select_from(JRWorklog).where(where))
+    after = await _count(
+        select(func.count()).select_from(JRWorklog).where(where)
+    )
     return {"worklogs_synced": after - before, "total_in_period": after}
 
 
 async def _do_wst_prepare(payload: dict[str, Any]) -> dict[str, Any]:
-    period_lo = datetime.combine(date.fromisoformat(payload["start"]), time.min)
-    period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
-    where = (
-        (WorklogSyncTask.started_at >= period_lo)
-        & (WorklogSyncTask.started_at <= period_hi)
+    period_lo = datetime.combine(
+        date.fromisoformat(payload["start"]), time.min
     )
-    before = await _count(select(func.count()).select_from(WorklogSyncTask).where(where))
+    period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
+    where = (WorklogSyncTask.started_at >= period_lo) & (
+        WorklogSyncTask.started_at <= period_hi
+    )
+    before = await _count(
+        select(func.count()).select_from(WorklogSyncTask).where(where)
+    )
     await WorllogSyncTask.create_task_for_sync(period_lo, period_hi)
-    after = await _count(select(func.count()).select_from(WorklogSyncTask).where(where))
+    after = await _count(
+        select(func.count()).select_from(WorklogSyncTask).where(where)
+    )
     return {"created": after - before, "total_in_period": after}
 
 
 async def _do_wst_resolve(payload: dict[str, Any]) -> dict[str, Any]:
-    period_lo = datetime.combine(date.fromisoformat(payload["start"]), time.min)
+    period_lo = datetime.combine(
+        date.fromisoformat(payload["start"]), time.min
+    )
     period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
     where_create = (
         (WorklogSyncTask.started_at >= period_lo)
@@ -176,7 +241,9 @@ async def _do_wst_resolve(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _do_wst_push(payload: dict[str, Any]) -> dict[str, Any]:
-    period_lo = datetime.combine(date.fromisoformat(payload["start"]), time.min)
+    period_lo = datetime.combine(
+        date.fromisoformat(payload["start"]), time.min
+    )
     period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
     worker = payload["worker_key"]
     where_created = (
@@ -187,7 +254,9 @@ async def _do_wst_push(payload: dict[str, Any]) -> dict[str, Any]:
     before = await _count(
         select(func.count()).select_from(WorklogSyncTask).where(where_created)
     )
-    await WorllogSyncTask().create_worklogs(period_lo, period_hi, worker=worker)
+    await WorllogSyncTask().create_worklogs(
+        period_lo, period_hi, worker=worker
+    )
     after = await _count(
         select(func.count()).select_from(WorklogSyncTask).where(where_created)
     )
@@ -195,6 +264,7 @@ async def _do_wst_push(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---- endpoints -----------------------------------------------------------
+
 
 @router.post("/timecamp/projects")
 async def sync_timecamp_projects(
@@ -209,6 +279,9 @@ async def sync_timecamp_projects(
         background=background,
         bg_tasks=bg_tasks,
         work=_do_tc_projects,
+        enqueue=lambda jid: celery_tasks.sync_timecamp_projects.delay(
+            created_by=current.username, job_id=jid
+        ),
     )
 
 
@@ -227,6 +300,12 @@ async def sync_timecamp_entries(
         background=background,
         bg_tasks=bg_tasks,
         work=lambda: _do_tc_entries(payload),
+        enqueue=lambda jid: celery_tasks.sync_timecamp_entries.delay(
+            payload["start"],
+            payload["end"],
+            created_by=current.username,
+            job_id=jid,
+        ),
     )
 
 
@@ -243,6 +322,9 @@ async def sync_jira_projects(
         background=background,
         bg_tasks=bg_tasks,
         work=_do_jr_projects,
+        enqueue=lambda jid: celery_tasks.sync_jira_projects.delay(
+            created_by=current.username, job_id=jid
+        ),
     )
 
 
@@ -256,7 +338,8 @@ async def sync_jira_issues(
     # Validation runs before the wrapper (api-sync-triggers ``Empty keys array``).
     if not body.keys:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="keys must be non-empty"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="keys must be non-empty",
         )
     payload = {"keys": body.keys}
     return await _execute(
@@ -284,7 +367,9 @@ async def sync_jira_issues_all(
     без тіла — усі задачі.
     """
     payload = (
-        {"start": body.start.isoformat(), "end": body.end.isoformat()} if body else None
+        {"start": body.start.isoformat(), "end": body.end.isoformat()}
+        if body
+        else None
     )
     return await _execute(
         trigger_name="sync.jira.issues-all",
@@ -293,6 +378,12 @@ async def sync_jira_issues_all(
         background=background,
         bg_tasks=bg_tasks,
         work=lambda: _do_jr_issues_all(payload),
+        enqueue=lambda jid: celery_tasks.sync_jira_issues_all.delay(
+            payload["start"] if payload else None,
+            payload["end"] if payload else None,
+            created_by=current.username,
+            job_id=jid,
+        ),
     )
 
 
@@ -304,7 +395,9 @@ async def sync_jira_worklogs(
     bg_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> JSONResponse:
     if not current.worker_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY
+        )
     payload = {
         "start": body.start.isoformat(),
         "end": body.end.isoformat(),
@@ -317,6 +410,13 @@ async def sync_jira_worklogs(
         background=background,
         bg_tasks=bg_tasks,
         work=lambda: _do_jr_worklogs(payload),
+        enqueue=lambda jid: celery_tasks.sync_tempo_worklogs.delay(
+            payload["start"],
+            payload["end"],
+            payload["worker_key"],
+            created_by=current.username,
+            job_id=jid,
+        ),
     )
 
 
@@ -364,7 +464,9 @@ async def sync_wst_push(
     bg_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> JSONResponse:
     if not current.worker_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY
+        )
     payload = {
         "start": body.start.isoformat(),
         "end": body.end.isoformat(),
@@ -377,4 +479,63 @@ async def sync_wst_push(
         background=background,
         bg_tasks=bg_tasks,
         work=lambda: _do_wst_push(payload),
+    )
+
+
+@router.post("/reconcile-links")
+async def sync_reconcile_links(
+    body: PeriodBody | None = Body(default=None),
+    current: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Поставити в чергу реконсиляцію лінків TimeCamp↔Tempo для свого `worker_key`.
+
+    Серверний еквівалент кнопки «звʼязати/синхронізувати все»: **лише** enqueue,
+    а виконання й `api_jobs`-аудит відбуваються у воркері (capability
+    `async-task-queue`). Без `worker_key` у токені — `400` до постановки. Без
+    тіла — дефолтний останній період (поточний місяць). Реальний пуш у Tempo
+    усередині реконсиляції гейтиться per-user `auto_push_tempo`.
+    """
+    if not current.worker_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY
+        )
+
+    if body is not None:
+        start_iso, end_iso = body.start.isoformat(), body.end.isoformat()
+    else:
+        first, last = current_month()
+        start_iso, end_iso = first.isoformat(), last.isoformat()
+
+    payload = {
+        "start": start_iso,
+        "end": end_iso,
+        "worker_key": current.worker_key,
+    }
+    job_id = await create_job(
+        trigger_name="sync.reconcile-links",
+        payload=payload,
+        created_by=current.username,
+    )
+    try:
+        celery_tasks.reconcile_links.delay(
+            start_iso,
+            end_iso,
+            current.worker_key,
+            created_by=current.username,
+            job_id=str(job_id),
+        )
+    except Exception as exc:
+        async with async_session_maker() as session:
+            await APIJobDAO.mark_failed(
+                session, job_id, f"enqueue failed: {exc}"
+            )
+            await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_QUEUE_UNAVAILABLE,
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={"job_id": str(job_id), "status": "queued"},
     )

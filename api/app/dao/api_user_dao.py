@@ -54,6 +54,31 @@ class APIUserDAO(BaseDAO):
         return user
 
     @classmethod
+    async def get_by_worker_key(
+        cls, db: AsyncSession, worker_key: str
+    ) -> APIUser | None:
+        """Активний користувач за `worker_key` (для читання `sync_prefs` у тасках)."""
+        result = await db.execute(
+            select(cls.model).where(
+                cls.model.worker_key == worker_key,
+                cls.model.is_active.is_(True),
+            )
+        )
+        return result.scalars().first()
+
+    @classmethod
+    async def list_active_with_worker(cls, db: AsyncSession) -> list[APIUser]:
+        """Активні користувачі з непорожнім `worker_key` — кандидати для beat (D9)."""
+        result = await db.execute(
+            select(cls.model).where(
+                cls.model.is_active.is_(True),
+                cls.model.worker_key.is_not(None),
+                cls.model.worker_key != "",
+            )
+        )
+        return list(result.scalars().all())
+
+    @classmethod
     async def count_active(cls, db: AsyncSession) -> int:
         result = await db.execute(
             select(func.count())

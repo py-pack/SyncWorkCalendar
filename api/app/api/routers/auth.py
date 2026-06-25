@@ -18,6 +18,7 @@ from app.api.schemas.auth import (
     TokenResponse,
 )
 from app.config import Settings
+from app.core.utils.sync_prefs import normalize_sync_prefs
 from app.dao import APIUserDAO
 
 
@@ -147,9 +148,14 @@ async def refresh(
 @router.get("/me", response_model=CurrentUserResponse)
 async def me(
     current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> CurrentUserResponse:
+    # sync_prefs читаємо з рядка користувача (нормалізуємо з дефолтами `false`).
+    user = await APIUserDAO.find(db, current.id)
+    sync_prefs = normalize_sync_prefs(user.sync_prefs if user else None)
     return CurrentUserResponse(
         username=current.username,
         worker_key=current.worker_key,
         expires_at=datetime.fromtimestamp(current.exp_ts, tz=UTC),
+        sync_prefs=sync_prefs,
     )

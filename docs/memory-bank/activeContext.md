@@ -1,5 +1,107 @@
 # Active Context
 
+## Активні зміни: автоматизація Tempo-синку (2026-06-24)
+
+**Зміна 1 `add-celery-auto-linking` — РЕАЛІЗОВАНА (32/32; `validate --strict` OK;
+бекенд-верифікація наживо PASS, нижче). Зміна 2 `rework-tempo-screen` — proposal
+(0/25).** Узгоджено з користувачем: дві вкладки на `/tempo`, дві зміни, beat зі
+специфічним розкладом.
+
+### Статус реалізації зміни 1 (`add-celery-auto-linking`, 2026-06-24)
+
+**Реалізовано і верифіковано наживо (НЕ заархівовано — лишається архів +
+фронт-перемикачі зі зміни 2).** Нова інфра черг: `Celery 5.6`+`Redis`
+(`celery[redis]` у `api/pyproject.toml`) + сервіси `redis`/`worker`/`beat` у
+`docker-compose.yml` (redis named volume, host-порт **`11332`**; worker/beat на
+образі `./api`, без портів). **Alembic head → `69dde0d17ff2`**
+(`add_sync_prefs_to_api_users`, JSONB nullable, без `server_default`; застосовано).
+
+- **Celery-місток (D3):** `app/tasks/celery_bridge.py` — `run_async` проганяє
+  кожну таску у свіжому event-loop зі **свіжим engine/sessionmaker** (rebind
+  глобалей `db_helper`) + `dispose()`; `run_audited_task` переюзовує спільне ядро
+  `api_jobs`-аудиту, винесене з `jobs_wrapper` (`create_job`/`run_existing_job`).
+  Воркер — `--pool=prefork --max-tasks-per-child=100`. **Верифіковано наживо:**
+  повторні таски в одному prefork-воркері (docker) проходять без asyncpg
+  loop-binding; `api_jobs` `running→needs_verification`.
+- **8 тасок** (`app/tasks/celery_tasks.py`): обгортки `sync.timecamp.*`/
+  `sync.jira.*`/`sync.jira.worklogs`/`sync.reconcile-links` + 2 beat-диспетчери.
+  Beat (`app/celery_app.py`): `01:00` TimeCamp+Jira, `01:30` Tempo (фіксовані
+  константи; таймзона з `APP__CELERY__TIMEZONE`, дефолт `UTC`); диспетчери
+  ітерують активних `api_users` з `worker_key` і **поважають `sync_prefs`**.
+- **Реконсиляція (`app/tasks/reconcile_task.py` `ReconcileLinksTask`):** upsert WST
+  за `source_id` (новий `TCEntriesDAO.get_match_candidates` — на відміну від
+  `get_entries_for_worklogs` НЕ виключає наявні WST і бере переданий `worker_key`),
+  перелінк на зміну опису (без авто-відлінку), дедуп `JRWorklogDAO.find_match`
+  (`target_id` без HTTP), **активований update-flow** `created→pre_update→update→
+  updated` через новий `JiraService.update_worklog` (Tempo `PUT`). Пуш гейтиться
+  per-user `auto_push_tempo`. **Верифіковано наживо** (синтетичні дані, фейк-Tempo,
+  очищено): create+dedup, relink+update, no-auto-unlink — усі PASS.
+- **API:** `sync_prefs` у `GET /auth/me`; `PATCH /users/me/sync-prefs` (часткове
+  злиття, `extra=forbid`→422); `POST /sync/reconcile-links` (enqueue, `400` без
+  `worker_key`, повертає `job_id`); важкі тригери у `?background=true` тепер
+  **enqueue** у чергу (а не `BackgroundTasks`), синхронний режим — дефолт.
+  Хелпер `app/core/utils/sync_prefs.py` (`normalize_sync_prefs`/`merge_sync_prefs`,
+  дефолт усього `false` = opt-in). **Верифіковано наживо HTTP:** `/auth/me`,
+  PATCH (merge/422), `POST /sync/reconcile-links` 202→воркер закрив той самий
+  `api_jobs`-рядок; 401 без токена.
+- **Рішення гейтингу (settled):** **manual** `POST /sync/reconcile-links` гейтить
+  лише `auto_push_tempo` (реальний Tempo-запис), а `auto_linking` — НЕ (явна дія
+  користувача завжди оновлює лінки); **beat** гейтить per-user і `auto_linking`,
+  і `auto_tempo_pull`. Безпечно: масово в Tempo нічого не пишеться без opt-in.
+- **Операційний нюанс:** контейнер `api` має анонімний `/app/.venv`-том — після
+  додавання `celery` його треба **перебудувати + recreate з renewed anon volume**
+  (`docker compose build api && up -d --force-recreate --renew-anon-volumes api`),
+  інакше `--reload` валить `ModuleNotFoundError: celery` (той самий патерн, що з
+  `google-auth`). Зроблено; стек `redis/worker/beat/api` піднятий і робочий.
+  Host-run воркера/beat — `make worker`/`make beat` (redis на `localhost:11332`).
+- **Відкрите питання (на QA):** толерантність дедупу за `started_at`/`duration` —
+  поки точний збіг (v1); вікно ±хвилини — за потреби (`design.md` → Open Questions).
+
+**Дві послідовні OpenSpec-зміни (обидві `validate --strict` — OK; узгоджено з
+користувачем: дві вкладки на `/tempo`, дві зміни, beat зі специфічним розкладом).**
+Мотив — лінкування TimeCamp↔Tempo повністю ручне, бракує (а) звірки проти `jr_worklogs`
+перед пушем (ризик дублів), (б) перематчингу при **зміні** опису, (в) тривкої черги й
+планувальника. Підтверджено аналізом коду: `WorllogSyncTask.before_create/
+create_worklogs` НЕ звіряють `jr_worklogs`; матч рахується лише на set опису; Celery/
+Redis/beat відсутні; read-ендпоінта `jr_worklogs` немає (є лише `GET
+/worklog-sync-tasks`).
+
+1. [`add-celery-auto-linking`](../../openspec/changes/add-celery-auto-linking/)
+   (backend/інфра, 32 задачі) — `Celery` + `Redis`(broker, порт `11332`, named
+   volume) + `beat` у нових контейнерах `worker`/`beat`/`redis`. Авто-реконсиляція
+   лінків на створення **і зміну** опису (перелінк, але **ніколи** не авто-відлінк);
+   дедуп проти `jr_worklogs` за `(issue, дата, worker, тривалість)`; авто-створення/
+   **оновлення** Tempo-відмітки (активує раніше відкладений `pre_update→update→
+   updated`). Beat (таймзона з env `APP__CELERY__TIMEZONE`, дефолт `UTC`/UTC+0; часи —
+   фіксовані константи): `01:00` TimeCamp+Jira, `01:30` Tempo, далі реконсиляція.
+   Per-user `api_users.sync_prefs` (JSONB, **nullable**, дефолт `NULL` → читається як
+   `false`; автосинк **opt-in**) гейтить кожен автосинк; `alembic`-міграція (head
+   `10b7dc50b00f`); `/auth/me` віддає `sync_prefs`, `PATCH /users/me/sync-prefs`;
+   новий `POST /sync/reconcile-links` (enqueue). 6 дельт: нові
+   `async-task-queue`/`backend-auto-linking`; MODIFIED `container-orchestration`/
+   `api-sync-triggers`/`api-users-management`/`api-auth`.
+2. [`rework-tempo-screen`](../../openspec/changes/rework-tempo-screen/)
+   (фронт + мінімум backend, 25 задач) — `/tempo` під патерн `DataPage` з **двома
+   вкладками** (реальні Tempo-worklog-и `jr_worklogs` / конвеєр WST), `PeriodPicker` +
+   `SyncFilter` + **пошук за назвою задачі** + пагінація; кожен рядок показує **номер
+   і назву** задачі (`issue_name`). **Попап з описом** перед дією, усі кнопки зверху,
+   **пер-рядкова** дія замість чекбоксів (`POST /sync/worklog-tasks/{id}/push`),
+   кнопка **«Забрати з Tempo»** (`POST /sync/jira/worklogs`). Новий read `GET
+   /jr-worklogs` (за прецедентом `GET /tc-entries`) + розширення `GET
+   /worklog-sync-tasks` (пагінація/`synced`/`q`/`issue_name`). Меню user-chip — **один**
+   пункт «Профіль» (замість двох) → екран **«Профіль»** на двох закладках: *Особисті
+   дані* (self-edit `PATCH /users/me` усіх полів **крім** `email`/`is_active` — read-only,
+   щоб не вкрасти/не вимкнути себе; пароль окремо через хешування `PATCH
+   /users/me/password`) і *Синхронізації* (тумблери `sync_prefs`, дефолт **вимкнено**).
+   6 дельт: новий
+   `frontend-profile`; MODIFIED `frontend-data-tables`/`api-sync-status`/
+   `api-sync-triggers`/`api-users-management`/`web-app-shell`. Споживає `sync_prefs` із
+   зміни 1 — мерджити після неї.
+
+**Свідоме розширення скоупу:** update-flow Tempo (`pre_update→update→updated`)
+активується у зміні 1 (бо «довести метч до кінця» = й оновлення); видалення worklog-ів
+і авто-відлінк лишаються поза скоупом. Деталі рішень — `design.md` кожної зміни.
+
 ## Заархівована зміна: `rework-jira-issues-screen` (2026-06-23)
 
 **Реалізовано і заархівовано 2026-06-23 (24/24; браузерний QA підтверджено
@@ -538,10 +640,12 @@ capability-специфікації злиті в `openspec/specs/` (`monorepo-l
 
 ## Активні відкриті питання
 
-- **Сценарій оновлення worklog-ів.** Статуси `pre_update/update/updated` в
-  `StatusTaskEnum` зарезервовані, але не використовуються. Активацію винесено в
-  майбутню зміну **`add-worklog-update-flow`** (round-trip update/delete у Tempo
-  для вже-`synced` блоків календаря) — див. `decisinLog.md` → D-016.
+- **Сценарій оновлення worklog-ів.** Статуси `pre_update/update/updated` —
+  **активовано** зміною `add-celery-auto-linking` (реконсиляція оновлює вже-`created`
+  worklog у Tempo через `JiraService.update_worklog` PUT при зміні контенту/часу).
+  Поза скоупом лишається **видалення** worklog-ів і авто-відлінк — винесено в
+  майбутню **`add-worklog-update-flow`** (delete-гілка для `synced`-блоків
+  календаря) — див. `decisinLog.md` → D-016.
 - **Назва `worllog_sync_task.py`.** Файл і клас містять одрук (`worllog` замість
   `worklog`). Перейменування зачепить імпорти — поки не виправлено
   (`decisinLog.md` → D-008).

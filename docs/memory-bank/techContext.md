@@ -47,6 +47,10 @@
 - `alembic ^1.13`.
 - `requests ^2.32` — для зовнішніх API (TimeCamp, Jira).
 - `nest-asyncio ^1.6` — для ноутбука.
+- `celery[redis] ^5.6` — тривка черга задач (broker `Redis`) + `beat`-планувальник;
+  воркер/beat у власних docker-контейнерах (зміна `add-celery-auto-linking`).
+  Конфіг — `APP__REDIS__URL` (дефолт `redis://redis:6379/0`),
+  `APP__CELERY__TIMEZONE` (дефолт `UTC`). Точка входу — `app/celery_app.py`.
 - dev: `black ^24.8`.
 
 ## БД
@@ -92,10 +96,11 @@
   `target_metadata = Base.metadata`.
 - Файли версій іменуються `%Y_%m_%d_%H%M-<rev>_<slug>.py`.
 - Post-hook — `black -l 79` для нових ревізій.
-- Поточний head: `ef2c7288bbb0` (`add_api_layer_tables`, 2026-05-13) —
-  додає `api_users` + `api_jobs` (+ enum `api_job_status_enum`).
-  Попередній head — `b4117e0c3dd4` (`update column started_at jr_worklogs`,
-  2024-10-02). Доменні моделі (`tc_*`, `jr_*`, `worklog_sync_tasks`,
+- Поточний head: **`69dde0d17ff2`** (`add_sync_prefs_to_api_users`, 2026-06-24,
+  зміна `add-celery-auto-linking`) — додає `api_users.sync_prefs` (JSONB,
+  nullable, без `server_default`). Ланцюг попередніх: `10b7dc50b00f`
+  (`password_hash` nullable) → `c03728fbb1cf` (`email`) → `ef2c7288bbb0`
+  (`api_users`+`api_jobs`). Доменні моделі (`tc_*`, `jr_*`, `worklog_sync_tasks`,
   `key_templates`) відображені без додаткових міграцій.
 
 ## Команди (backend)
@@ -123,12 +128,18 @@ uv run run_api.py            # або: uv run uvicorn app.api.app:app --reload
 
 # argparse-CLI (керування застосунком)
 uv run python -m app.cli add_user        # завести користувача api_users
+
+# Celery (host-run; redis — контейнерний на localhost:11332)
+make worker                              # воркер (prefork, max-tasks-per-child=100)
+make beat                                # beat-планувальник (один екземпляр)
 ```
 
 Кореневий `Makefile` має шорткати, які самі роблять `cd api && uv run …`:
 `make serve` (HTTP API), `make dev` (uvicorn --reload), `make add-user`,
-`make cli ARGS="..."`, `make sync`. Frontend: `make front-dev`,
-`make front-build`.
+`make cli ARGS="..."`, `make sync`, **`make worker`/`make beat`** (Celery
+host-run; задають `APP__REDIS__URL=redis://localhost:11332/0`). Frontend:
+`make front-dev`, `make front-build`. У docker воркер/beat — окремі сервіси
+`worker`/`beat` (`docker compose up`).
 
 ## Frontend (`front/`)
 

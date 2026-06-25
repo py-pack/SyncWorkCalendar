@@ -96,13 +96,22 @@ app/tasks/*                  ← оркестрація (TimeCamp/Jira/Worklog t
 
 ```
 pre_create → create → created
-pre_update → update → updated    (зарезервовано, не використовується)
-sync                             (зарезервовано)
+created → pre_update → update → updated    (активовано: зміна add-celery-auto-linking)
+sync                                       (зарезервовано)
 ```
 
-Перехід `pre_create → create` робить `WorllogSyncTask.before_create`,
-перехід `create → created` — `WorllogSyncTask.create_worklogs` після успішного
-виклику `Tempo` API.
+Ручний конвеєр: перехід `pre_create → create` робить `WorllogSyncTask.before_create`,
+`create → created` — `WorllogSyncTask.create_worklogs` після успішного виклику
+`Tempo` API.
+
+**Авто-реконсиляція (`ReconcileLinksTask`, зміна `add-celery-auto-linking`)** ганяє
+ту саму машину ідемпотентно по періоду: upsert WST за `source_id`, дедуп проти
+`jr_worklogs` (`JRWorklogDAO.find_match` → `target_id` без HTTP), і **активує**
+update-гілку — коли вже-`created` запис змінив контент/час (зокрема перелінк на
+іншу задачу при зміні опису), переходить `created → pre_update → update → updated`
+через `JiraService.update_worklog` (Tempo `PUT`). Видалення/авто-відлінк — поза
+скоупом (звʼязок ніколи не розривається авто). Реальний пуш/оновлення в Tempo
+гейтиться per-user `api_users.sync_prefs.auto_push_tempo` (opt-in).
 
 ## State machine — `APIJobStatusEnum`
 

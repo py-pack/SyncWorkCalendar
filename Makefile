@@ -1,9 +1,11 @@
-.PHONY: serve dev cli add-user sync front-dev front-build
+.PHONY: serve dev cli add-user sync worker beat front-dev front-build
 
 # Host-порти за конвенцією (10xxx — сервіси, 11xxx — БД), щоб проекти не
 # конфліктували між собою. Перевизначити: `make dev API_PORT=10201`.
 API_PORT   ?= 10331
 FRONT_PORT ?= 10332
+# Брокер Celery при host-run воркера/beat (контейнерний redis слухає 11332 на хості)
+HOST_REDIS_URL ?= redis://localhost:11332/0
 
 # --- Backend (запускається всередині api/) ---
 
@@ -26,6 +28,15 @@ add-user:
 # Синхронізувати залежності бекенду
 sync:
 	cd api && uv sync
+
+# Celery-воркер (host-run; redis — контейнерний на 11332). prefork +
+# max-tasks-per-child як підстраховка від loop-binding asyncpg.
+worker:
+	cd api && APP__REDIS__URL=$(HOST_REDIS_URL) uv run celery -A app.celery_app worker --loglevel=info --pool=prefork --max-tasks-per-child=100
+
+# Celery beat-планувальник (host-run; один екземпляр)
+beat:
+	cd api && APP__REDIS__URL=$(HOST_REDIS_URL) uv run celery -A app.celery_app beat --loglevel=info
 
 # --- Frontend (запускається всередині front/) ---
 

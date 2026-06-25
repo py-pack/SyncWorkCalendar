@@ -38,3 +38,25 @@ class UserPatch(BaseModel):
     username: str | None = Field(default=None, min_length=1)
     worker_key: str | None = None
     is_active: bool | None = None
+
+
+class SyncPrefs(BaseModel):
+    """Повний об'єкт per-user перемикачів автосинку (відповідь з дефолтами)."""
+
+    auto_timecamp_pull: bool
+    auto_jira_pull: bool
+    auto_tempo_pull: bool
+    auto_linking: bool
+    auto_push_tempo: bool
+
+
+class SyncPrefsPatch(BaseModel):
+    """Тіло `PATCH /users/me/sync-prefs` — часткове злиття; невідомі ключі → 422."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    auto_timecamp_pull: bool | None = None
+    auto_jira_pull: bool | None = None
+    auto_tempo_pull: bool | None = None
+    auto_linking: bool | None = None
+    auto_push_tempo: bool | None = None

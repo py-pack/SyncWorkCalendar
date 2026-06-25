@@ -1,6 +1,7 @@
 from datetime import datetime, UTC
 
 from sqlalchemy import String, Boolean, DateTime
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.event import listens_for
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,6 +26,10 @@ class APIUser(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True
     )
+    # Per-user перемикачі автосинку (capability `api-users-management`). JSONB,
+    # nullable, БЕЗ server_default: відсутність колонки/ключа читається як
+    # `false` (автосинк opt-in). Ключі — у `app/core/utils/sync_prefs.py`.
+    sync_prefs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

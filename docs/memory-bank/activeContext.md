@@ -1,5 +1,52 @@
 # Active Context
 
+## Заархівована зміна: `add-profile-run-now-sync` (2026-06-25)
+
+**ЗААРХІВОВАНО 2026-06-25 (16/17 — лишився лише 6.3 браузерний QA, на користувача;
+`openspec validate --strict` OK; `npm run build` (`vue-tsc`+`vite`) чисто).
+Дельту злито в `openspec/specs/frontend-profile/` (ADDED-вимога «Запуск синку
+«зараз»…» + оновлено `Purpose`); `validate --specs --strict` — 24/24 OK.**
+Тека — [`archive/2026-06-25-add-profile-run-now-sync/`](../../openspec/changes/archive/2026-06-25-add-profile-run-now-sync/).
+Мета: напроти **кожного** з 5 тумблерів `sync_prefs` на закладці «Синхронізації»
+екрана «Профіль» (`SyncPrefsToggles.vue`) додати кнопку **«Запустити зараз»** →
+спільний попап із `PeriodPicker` (дефолт «цей місяць») → негайний запуск
+відповідної sync-дії за період.
+
+- **Реалізація (frontend-онлі):** новий клієнтський метод `api.reconcileLinks`
+  (єдиний відсутній; `POST /sync/reconcile-links`, `202 queued`). Новий
+  `components/profile/runActions.ts` — мапа `RUN_ACTIONS` (по ключу `keyof
+  SyncPrefs`): метадані (i18n-заголовок/підказка/іконка, `needsWorkerKey`) +
+  `run(period)`, що кличе наявні `api.*` **напряму** (без релоаду таблиць інших
+  екранів, D5); TimeCamp/Jira дзеркалять крон — спершу `syncTc/JrProjects()`,
+  потім дані за період (D3). Новий `components/profile/RunSyncModal.vue`
+  (`Sheet`+`PeriodPicker`+`Spinner`, за зразком `SyncEntriesModal`): дві гілки
+  результату — синхронна **дельта** (рендер пар `result`) і `queued` (D2,
+  «див. Журнал»), помилка через `ApiError.detail` без закриття. У
+  `SyncPrefsToggles.vue` рядок переведено з `<label>` на `<div>` (Toggle — не
+  `<input>`, тож семантику не втрачено) + кнопка `bolt` «Запустити зараз»
+  (size `sm`, variant `soft`) у `.sprefs__ctl`; worker_key-залежні дії
+  дизейбляться без `worker_key` із tooltip (D6). i18n `sp_run_now`/`rsync_*`
+  (UK+EN); CSS `.sprefs__ctl`/`.rsync__*` у `data.css`.
+
+- **Фронтенд-онлі** — усі тригери вже існують і канонічні в `api-sync-triggers`;
+  нових ендпоінтів немає, контракт не змінюється, без alembic (head
+  `69dde0d17ff2`). Мапінг тумблер→тригер: `auto_timecamp_pull` →
+  `timecamp/projects`+`timecamp/entries`; `auto_jira_pull` →
+  `jira/projects`+`jira/issues-all`; `auto_tempo_pull` → `jira/worklogs`;
+  `auto_linking` → `reconcile-links` (enqueue/`202`); `auto_push_tempo` →
+  `worklog-tasks/push-to-tempo`.
+- **Рішення (design.md):** D1 виконання **синхронне**, як `SyncEntriesModal`/
+  `PullWorklogsModal` (спінер→дельта/помилка); D2 `auto_linking` лишається
+  enqueue (попап показує «у черзі — див. Журнал»); D3 TimeCamp/Jira
+  **дзеркалять крон** (проекти + дані за період); D4 **один** спільний попап
+  `RunSyncModal.vue`, параметризований дією; D5 стор/клієнт реюзають наявні
+  методи (бракує лише `api.reconcileLinks`), без релоаду таблиць інших екранів;
+  D6 worker_key-залежні дії дають зрозумілу помилку; D7 «мова синку» тут не
+  застосовується (це дії/налаштування, не рядковий стан).
+- **Дельта (злита):** MODIFIED `frontend-profile` (ADDED-вимога «Запуск синку
+  «зараз» із закладки «Синхронізації»»). **Без бекенду й alembic** (head
+  `69dde0d17ff2`). Лишилось — 6.3 браузерний QA (на користувача) + git-commit.
+
 ## Заархівовані зміни: автоматизація Tempo-синку (2026-06-25)
 
 **Обидві зміни ЗААРХІВОВАНО 2026-06-25** (`openspec archive`, послідовно:

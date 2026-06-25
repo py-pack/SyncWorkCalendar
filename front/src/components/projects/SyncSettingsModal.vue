@@ -6,7 +6,6 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import type { JRIssue, TCProject } from '@/api/types'
 import Btn from '@/components/ui/Btn.vue'
-import Field from '@/components/ui/Field.vue'
 import IconBtn from '@/components/ui/IconBtn.vue'
 import Sheet from '@/components/ui/Sheet.vue'
 import Spinner from '@/components/ui/Spinner.vue'
@@ -81,6 +80,9 @@ function pick(it: JRIssue): void {
   selKey.value = it.key
   selName.value = it.name
   selActive.value = it.active
+  // Вибір задачі = намір синкати: вмикаємо синк, інакше Save відправив би
+  // `is_sync:false` і мовчки відкинув `issue_key` (звʼязок не зберігся б).
+  enabled.value = true
   query.value = ''
   results.value = []
 }
@@ -123,7 +125,11 @@ async function save(): Promise<void> {
         <Toggle :checked="enabled" @update:checked="enabled = $event" />
       </div>
 
-      <Field :label="t.ssm_task" :hint="t.ssm_task_hint">
+      <!-- НЕ обгортаємо клікабельний список у <label> (Field): клік по пункту
+           перехоплює активація label → фокус на input. Той самий вигляд — div. -->
+      <div class="sw-field">
+        <span class="sw-field__label">{{ t.ssm_task }}</span>
+
         <div v-if="selKey" class="ssm__sel" :class="{ 'is-dim': selActive === false }">
           <span class="mono">{{ selKey }}</span>
           <span v-if="selName" class="ssm__selname">{{ selName }}</span>
@@ -146,7 +152,9 @@ async function save(): Promise<void> {
           </li>
         </ul>
         <p v-else-if="query.trim()" class="ssm__nores">{{ t.ssm_no_results }}</p>
-      </Field>
+
+        <span class="sw-field__hint">{{ t.ssm_task_hint }}</span>
+      </div>
 
       <p v-if="err" class="data-error">{{ err }}</p>
 

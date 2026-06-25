@@ -22,6 +22,26 @@
 
 ## Що в роботі (OpenSpec)
 
+- [`add-profile-run-now-sync`](../../openspec/changes/archive/2026-06-25-add-profile-run-now-sync/)
+  — **ЗААРХІВОВАНО 2026-06-25 (16/17 — лишився лише 6.3 браузерний QA, на
+  користувача; `validate --strict` OK; `npm run build` чисто; дельту злито в
+  `openspec/specs/frontend-profile/`, `validate --specs --strict` 24/24 OK).**
+  Кнопка «Запустити зараз» напроти кожного з 5 тумблерів `sync_prefs` на закладці
+  «Синхронізації» → спільний попап `RunSyncModal.vue` (`PeriodPicker`, дефолт «цей
+  місяць») → негайний запуск відповідної sync-дії за період. **Фронтенд-онлі**:
+  усі тригери вже канонічні в `api-sync-triggers` (нових ендпоінтів немає, без
+  alembic, head `69dde0d17ff2`). Реалізація: новий `api.reconcileLinks` (єдиний
+  відсутній метод клієнта); `components/profile/runActions.ts` (мапа `RUN_ACTIONS`
+  по ключу `keyof SyncPrefs` — метадані + `run(period)`, що кличе `api.*` напряму
+  **без** релоаду інших екранів, D5; TimeCamp/Jira дзеркалять крон — проекти, далі
+  дані, D3); `components/profile/RunSyncModal.vue` (дві гілки — синхронна дельта /
+  `202 queued`→Журнал, D1/D2; `ApiError.detail` без закриття); кнопка `bolt`
+  «Запустити зараз» у кожному `.sprefs__row` (рядок `<label>`→`<div>`), дизейбл
+  worker_key-залежних дій без `worker_key` (D6); i18n `sp_run_now`/`rsync_*`
+  (UK+EN); CSS `.sprefs__ctl`/`.rsync__*`. Дельта (злита в `openspec/specs/`) —
+  MODIFIED `frontend-profile`. Лишилось — 6.3 браузерний QA (на користувача) +
+  git-commit. Деталі — `design.md` (D1–D7) у теці архіву.
+
 - [`add-celery-auto-linking`](../../openspec/changes/archive/2026-06-25-add-celery-auto-linking/)
   — **ЗААРХІВОВАНО 2026-06-25 (32/32; `validate --strict` OK; бекенд-верифікація
   наживо PASS). Дельти злиті в `openspec/specs/`: нові

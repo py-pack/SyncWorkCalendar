@@ -338,6 +338,14 @@ export const api = {
     )
   },
 
+  /** POST /sync/reconcile-links — реконсиляція лінків TimeCamp↔Tempo. На відміну
+   *  від решти тригерів — **завжди** enqueue (capability `async-task-queue`):
+   *  відповідь `202 {job_id, status:"queued"}`, без `result` і без синхронного
+   *  режиму. `SyncTriggerResult` покриває обидві форми (`result` тут — `null`). */
+  reconcileLinks(period: Period): Promise<SyncTriggerResult> {
+    return request<SyncTriggerResult>('/sync/reconcile-links', jsonBody(period))
+  },
+
   // --- Sync journal (api_jobs) ---------------------------------------------
 
   /** GET /api-jobs — журнал sync-операцій із фільтрами. */

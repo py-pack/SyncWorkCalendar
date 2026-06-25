@@ -1,7 +1,12 @@
 /* =========================================================================
-   Sync Work — стор журналу синку (api_jobs). Фільтр за статусом, деталі job-а
+   Sync Work — стор журналу синку (api_jobs). Читає ЛИШЕ з локальної БД через
+   GET /api-jobs: фільтр за періодом (`started_at`), статусом і тригером +
+   серверна пагінація (`limit`/`offset`/`total`). Деталі job-а
    (payload/result/error) і крок verify; рядки оновлюються локально без повного
    перезавантаження. needsVerification живить лічильник у навігації.
+
+   «Мова синку» (SyncState/SyncFilter) тут НЕ застосовується — статус job-а це
+   4-станова машина життєвого циклу, а не бінарне synced/not-synced.
    ========================================================================= */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -12,9 +17,11 @@ import {
   type ApiJobDetail,
   type ApiJobStatus,
   type ApiJobSummary,
+  type Period,
 } from '@/api/types'
+import { defaultReviewPeriod } from '@/lib/period'
 
-export type JournalFilter = 'all' | ApiJobStatus
+const PAGE_SIZE = 50
 
 function errMsg(e: unknown): string {
   if (e instanceof ApiError) return e.detail
@@ -24,7 +31,11 @@ function errMsg(e: unknown): string {
 export const useJournalStore = defineStore('journal', () => {
   const jobs = ref<ApiJobSummary[]>([])
   const total = ref(0)
-  const filter = ref<JournalFilter>('all')
+  // Дефолт — поточний місяць (журнал — свіжа активність, job-и щодня).
+  const period = ref<Period>(defaultReviewPeriod())
+  const statusFilter = ref<ApiJobStatus | null>(null)
+  const triggerFilter = ref<string | null>(null)
+  const offset = ref(0)
   const detail = ref<ApiJobDetail | null>(null)
   const error = ref<string | null>(null)
   // Лічильник для бейджа навігації — незалежний від поточного фільтра списку.
@@ -42,9 +53,14 @@ export const useJournalStore = defineStore('journal', () => {
   async function load(): Promise<void> {
     error.value = null
     try {
-      const res = await api.apiJobs(
-        filter.value === 'all' ? {} : { status: filter.value },
-      )
+      const res = await api.apiJobs({
+        status: statusFilter.value ?? undefined,
+        trigger_name: triggerFilter.value ?? undefined,
+        start: period.value.start,
+        end: period.value.end,
+        limit: PAGE_SIZE,
+        offset: offset.value,
+      })
       jobs.value = res.items
       total.value = res.total
     } catch (e) {
@@ -53,9 +69,29 @@ export const useJournalStore = defineStore('journal', () => {
     void refreshNeedsCount()
   }
 
-  function setFilter(f: JournalFilter): void {
-    filter.value = f
-    void load()
+  // Зміна періоду чи будь-якого фільтра скидає пагінацію у 0 і перезавантажує.
+  function setPeriod(p: Period): Promise<void> {
+    period.value = p
+    offset.value = 0
+    return load()
+  }
+
+  function setStatusFilter(s: ApiJobStatus | null): Promise<void> {
+    statusFilter.value = s
+    offset.value = 0
+    return load()
+  }
+
+  function setTriggerFilter(tr: string | null): Promise<void> {
+    triggerFilter.value = tr
+    offset.value = 0
+    return load()
+  }
+
+  function setOffset(o: number): Promise<void> {
+    const max = Math.max(0, total.value - 1)
+    offset.value = Math.min(Math.max(0, o), max)
+    return load()
   }
 
   async function open(id: string): Promise<void> {
@@ -91,13 +127,20 @@ export const useJournalStore = defineStore('journal', () => {
   return {
     jobs,
     total,
-    filter,
+    period,
+    statusFilter,
+    triggerFilter,
+    offset,
+    pageSize: PAGE_SIZE,
     detail,
     error,
     needsCount,
     load,
     refreshNeedsCount,
-    setFilter,
+    setPeriod,
+    setStatusFilter,
+    setTriggerFilter,
+    setOffset,
     open,
     close,
     verify,

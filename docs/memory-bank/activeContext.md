@@ -1,5 +1,91 @@
 # Active Context
 
+## Активна зміна (OpenSpec, proposal): `add-api-jobs-cleanup` (2026-06-25)
+
+**Створено proposal 2026-06-25 (`openspec validate --strict` OK, 4/4 артефакти).**
+Тека — [`openspec/changes/add-api-jobs-cleanup/`](../../openspec/changes/add-api-jobs-cleanup/).
+Будується **поверх** `rework-journal-screen` (спільні `JournalView.vue`/
+`journal.ts`/`api_jobs.py`) — архівувати **після** неї. Мета — зупинити безмежне
+зростання `needs_verification`/`api_jobs` і додати масовий verify + UX.
+
+- **Передумова:** від статусу `verified` нічого не залежить (grep-перевірено) — це
+  суто аудит/лічильник; успішні job-и осідають у `needs_verification` (306) і ніхто
+  їх не закриває; навбейдж росте.
+- **Рішення користувача:** (1) авто-verify **за віком (TTL)** — Celery-таска
+  закриває `needs_verification` старші за `N` днів (`APP__CELERY__AUTO_VERIFY_DAYS`,
+  дефолт 7), `verified_by="system"`; (2) **TTL-видалення** термінальних
+  (`verified`/`failed`) старших за `M` днів (`APP__CELERY__JOB_TTL_DAYS`, дефолт 90);
+  `running`/`needs_verification` не видаляються; (3) кнопку зверху **замінити** на
+  «Підтвердити всі» (`POST /api-jobs/verify-all` за поточними фільтрами); (4)
+  візуальне полірування — бейдж статусу `nowrap` + зведення лічильників у тулбарі.
+- **Скоуп:** (backend) `CeleryConfig` +TTL; DAO `verify_matching`/
+  `auto_verify_older_than`/`delete_terminal_older_than`/`status_summary`; новий
+  `POST /api-jobs/verify-all`; `summary` у `GET /api-jobs`; нова maintenance-таска
+  `beat.cleanup_api_jobs` (**без** `api_jobs`-аудиту, D3) у beat (~`02:00`).
+  (frontend) `verifyAllJobs`/`summary` у клієнті+сторі, кнопка «Підтвердити всі»,
+  зведення-чипи, бейдж nowrap, i18n. **Без alembic** (head `69dde0d17ff2`).
+- **Дельти:** MODIFIED `api-jobs` (verify-all + `summary` + retention), MODIFIED
+  `frontend-sync-journal` (кнопка/зведення/nowrap), ADDED у `async-task-queue`
+  (планове прибирання). «Мова синку» НЕ застосовується. Рішення — `design.md` (D1–D7).
+
+## Активна зміна (OpenSpec): `rework-journal-screen` (2026-06-25)
+
+**РЕАЛІЗОВАНО 2026-06-25 (14/15 — лишився лише 5.3 браузерний QA, на користувача;
+`openspec validate --strict` OK; `npm run build` (`vue-tsc`+`vite`) чисто;
+бекенд-фікс верифіковано наживо).** Тека —
+[`openspec/changes/rework-journal-screen/`](../../openspec/changes/rework-journal-screen/).
+Мета — полагодити зламаний `/journal` і привести його до спільного формату
+дані-екранів.
+
+- **Бекенд-фікс (1.1):** у `schemas/api_jobs.py` додано
+  `@field_validator("status", mode="before")` на `APIJobSummary` (повертає
+  `v.value if isinstance(v, enum.Enum) else v`; успадковує `APIJobDetail`). Тип
+  лишився `Literal[str]` (чистий OpenAPI-енум). **Верифіковано наживо** (api на
+  `:10331`, dev `--reload`, таблиця 306 рядків `needs_verification`):
+  `GET /api-jobs`, навбейдж `?status=needs_verification&limit=1`,
+  `GET /api-jobs/{id}`, фільтр `trigger_name`+період → усі **200**, `status`
+  серіалізується як рядок; `model_validate(<ORM>)` у контейнері теж дає `str`.
+  `verify` — той самий доведений шлях, наживо не запускали (не мутувати реальні
+  рядки). Alembic head лишився **`69dde0d17ff2`** (без нової ревізії).
+- **Фронтенд:** `api/client.ts` — `apiJobs` отримав `start`/`end`;
+  `stores/journal.ts` переписано (стан `period`=`defaultReviewPeriod()`/
+  `statusFilter`/`triggerFilter`/`offset`/`pageSize`=50; `load()` передає всі
+  параметри; сетери `setPeriod`/`setStatusFilter`/`setTriggerFilter`/`setOffset`
+  скидають `offset`→0; `needsCount`/`open`/`close`/`verify` без зміни — навбейдж
+  `AppShell` цілий); `views/JournalView.vue` — тулбар `PeriodPicker` + 2
+  `FilterSelect` (статус + статичний перелік `SYNC_TRIGGERS`) замість
+  `.cal__chips`, серверна пагінація (`.tcpage`, як `/jira`), дати через новий
+  `fmtDateTime` (`lib/format.ts`: `fmtTime`/`fmtDateTime`) у колонці «Старт» і в
+  бічній панелі (started/finished/verified). i18n `job_flt_status`/
+  `job_flt_trigger`/`job_verified_at` (UK+EN). CSS — переюз наявних
+  `.pipe`/`.jrbar`/`.tcpage`; `.cal__chips`/`.chip` лишаються (їх ще використовує
+  `CalendarFilters.vue`). Без нових залежностей.
+
+- **Корінь 500 (діагноз наживо, лог контейнера):** `GET /api-jobs`,
+  `GET /api-jobs/{id}`, `POST /api-jobs/{id}/verify` усі роблять
+  `APIJobSummary/Detail.model_validate(<ORM>)`; ORM-поле `APIJob.status` — член
+  enum `APIJobStatusEnum`, а схема оголошує `status: Literal[str]`. Pydantic v2 з
+  `from_attributes=True` не коерсить enum→`.value` проти `Literal` →
+  `ValidationError` на кожному рядку → **500**. Сусідній `GET /worklog-sync-tasks`
+  цього уникає, бо роутер будує елементи вручну (`status=t.status.value`). 500
+  «прокинувся» лише тепер: Celery beat/worker наповнив `api_jobs` (306 рядків
+  `needs_verification`); поки таблиця була порожня — список повертав `[]` і не падав.
+  Та сама причина ламає і навбейдж (`?status=needs_verification&limit=1`).
+- **Скоуп:** (backend) фікс серіалізації `status`→рядок через
+  `@field_validator(mode="before")` у `schemas/api_jobs.py` (лагодить усі 3
+  ендпоінти; без нових ендпоінтів, **без alembic**, head `69dde0d17ff2`);
+  (frontend) `PeriodPicker` за `started_at` (бек уже приймає `start`/`end`),
+  серверна пагінація (`limit`/`offset`/`total` уже є), єдиний `fmtDate`
+  (`дд.мм.рррр`) замість сирих `.slice()`, спільний `FilterSelect` за статусом +
+  `trigger_name` замість ad-hoc «chips». **Бінарна «мова синку»
+  (`SyncState`/`SyncFilter`) тут НЕ застосовується** — статус job-а 4-становий, не
+  synced/not-synced. Кнопка лишається «Оновити» (re-read з БД — журнал сам є логом
+  синків, зовнішнього джерела немає). TTL/cleanup старих job-ів — поза скоупом
+  (майбутня `add-api-jobs-cleanup`).
+- **Дельти:** MODIFIED `api-jobs` (status серіалізується як рядок + регрес-гард
+  на непорожній таблиці), MODIFIED `frontend-sync-journal` (період/пагінація/
+  `fmtDate`/`FilterSelect`). Рішення — `design.md` (D1–D6).
+
 ## Заархівована зміна: `add-profile-run-now-sync` (2026-06-25)
 
 **ЗААРХІВОВАНО 2026-06-25 (16/17 — лишився лише 6.3 браузерний QA, на користувача;

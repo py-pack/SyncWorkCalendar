@@ -348,10 +348,13 @@ export const api = {
 
   // --- Sync journal (api_jobs) ---------------------------------------------
 
-  /** GET /api-jobs — журнал sync-операцій із фільтрами. */
+  /** GET /api-jobs — журнал sync-операцій із фільтрами (статус / тригер /
+   *  період за `started_at` / пагінація). */
   apiJobs(params?: {
     status?: ApiJobStatus
     trigger_name?: string
+    start?: string
+    end?: string
     limit?: number
     offset?: number
   }): Promise<ApiJobListResponse> {

@@ -1,8 +1,9 @@
+import enum
 from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 APIJobStatusLiteral = Literal["running", "needs_verification", "verified", "failed"]
@@ -19,6 +20,14 @@ class APIJobSummary(BaseModel):
     started_at: datetime
     finished_at: datetime | None
     verified_at: datetime | None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _status_to_value(cls, v: Any) -> Any:
+        # ORM віддає член enum `APIJobStatusEnum`; зводимо до рядкового значення,
+        # бо `Literal[str]` не коерсить enum-member із `model_validate(<ORM>)`
+        # (інакше — ValidationError на кожному рядку → 500). Успадковує APIJobDetail.
+        return v.value if isinstance(v, enum.Enum) else v
 
 
 class APIJobDetail(APIJobSummary):

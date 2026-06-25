@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 
+import type { ApiJobStatus, Period } from '@/api/types'
 import DataPage from '@/components/data/DataPage.vue'
 import DataTable from '@/components/data/DataTable.vue'
+import FilterSelect from '@/components/data/FilterSelect.vue'
+import PeriodPicker from '@/components/data/PeriodPicker.vue'
 import StatusBadge from '@/components/data/StatusBadge.vue'
 import SyncBtn from '@/components/data/SyncBtn.vue'
 import type { Column } from '@/components/data/types'
@@ -12,32 +15,75 @@ import Icon from '@/components/ui/Icon.vue'
 import Sheet from '@/components/ui/Sheet.vue'
 import Spinner from '@/components/ui/Spinner.vue'
 import { useI18n } from '@/i18n'
+import { fmtDateTime } from '@/lib/format'
 import { useJournalStore } from '@/stores/journal'
-import type { JournalFilter } from '@/stores/journal'
 
 const { t } = useI18n()
 const store = useJournalStore()
 
-const filters = computed<{ id: JournalFilter; label: string }[]>(() => [
-  { id: 'all', label: t.value.cal_all },
-  { id: 'needs_verification', label: t.value.s_needs_verification },
-  { id: 'failed', label: t.value.s_failed },
-  { id: 'running', label: t.value.s_running },
+// Статичний перелік відомих імен sync-тригерів (константи беку — стабільні).
+const SYNC_TRIGGERS = [
+  'sync.timecamp.projects',
+  'sync.timecamp.entries',
+  'sync.jira.projects',
+  'sync.jira.issues',
+  'sync.jira.issues-all',
+  'sync.jira.worklogs',
+  'sync.worklog-tasks.prepare',
+  'sync.worklog-tasks.resolve-issues',
+  'sync.worklog-tasks.push-to-tempo',
+  'sync.worklog-tasks.push-one',
+  'sync.reconcile-links',
+] as const
+
+const statusOptions = computed(() => [
+  { value: 'running', label: t.value.s_running },
+  { value: 'needs_verification', label: t.value.s_needs_verification },
+  { value: 'verified', label: t.value.s_verified },
+  { value: 'failed', label: t.value.s_failed },
 ])
+const triggerOptions = SYNC_TRIGGERS.map((tr) => ({ value: tr, label: tr }))
 
 const cols = computed<Column[]>(() => [
   { key: 'id', label: 'ID', width: 90, mono: true },
   { key: 'trigger_name', label: t.value.job_trigger },
   { key: 'status', label: t.value.col_status, width: 170 },
-  { key: 'started_at', label: t.value.job_started, width: 160, mono: true },
+  { key: 'started_at', label: t.value.job_started, width: 170, mono: true },
   { key: 'created_by', label: t.value.job_by, width: 120, mono: true },
   { key: 'act', label: '', align: 'right', width: 130 },
 ])
+
+// --- фільтри ---------------------------------------------------------------
+function onPeriod(p: Period): void {
+  void store.setPeriod(p)
+}
+function onStatus(v: string | null): void {
+  void store.setStatusFilter(v as ApiJobStatus | null)
+}
+function onTrigger(v: string | null): void {
+  void store.setTriggerFilter(v)
+}
+
+// --- пагінація -------------------------------------------------------------
+const canPrev = computed(() => store.offset > 0)
+const canNext = computed(() => store.offset + store.pageSize < store.total)
+const pageInfo = computed(() => {
+  const from = store.total === 0 ? 0 : store.offset + 1
+  const to = Math.min(store.offset + store.pageSize, store.total)
+  return `${from}–${to} / ${store.total}`
+})
+function prev(): void {
+  void store.setOffset(store.offset - store.pageSize)
+}
+function next(): void {
+  void store.setOffset(store.offset + store.pageSize)
+}
 
 function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+// Лише читання з БД при відкритті — журнал сам є логом синків (D6).
 onMounted(() => void store.load())
 </script>
 
@@ -48,18 +94,22 @@ onMounted(() => void store.load())
     </template>
 
     <template #toolbar>
-      <div class="pipe">
-        <div class="cal__chips">
-          <button
-            v-for="f in filters"
-            :key="f.id"
-            type="button"
-            :class="['chip', { 'is-on': store.filter === f.id }]"
-            @click="store.setFilter(f.id)"
-          >
-            {{ f.label }}
-          </button>
-        </div>
+      <div class="pipe jrbar">
+        <PeriodPicker :model-value="store.period" @update:model-value="onPeriod" />
+        <FilterSelect
+          :model-value="store.statusFilter"
+          :options="statusOptions"
+          :all-label="t.job_flt_status"
+          @update:model-value="onStatus"
+        />
+        <FilterSelect
+          :model-value="store.triggerFilter"
+          :options="triggerOptions"
+          :all-label="t.job_flt_trigger"
+          :placeholder="t.search"
+          searchable
+          @update:model-value="onTrigger"
+        />
       </div>
     </template>
 
@@ -81,7 +131,7 @@ onMounted(() => void store.load())
           </Badge>
           <StatusBadge v-else :status="row.status" />
         </template>
-        <template #cell-started_at="{ row }">{{ row.started_at.slice(5, 16) }}</template>
+        <template #cell-started_at="{ row }">{{ fmtDateTime(row.started_at) }}</template>
         <template #cell-act="{ row }">
           <Btn
             v-if="row.status === 'needs_verification'"
@@ -95,6 +145,16 @@ onMounted(() => void store.load())
           <Icon v-else name="chevR" :size="16" />
         </template>
       </DataTable>
+
+    <div v-if="store.total > store.pageSize" class="tcpage">
+      <Btn size="sm" variant="ghost" icon="chevL" :disabled="!canPrev" @click="prev">
+        {{ t.page_prev }}
+      </Btn>
+      <span class="tcpage__pos mono">{{ pageInfo }}</span>
+      <Btn size="sm" variant="ghost" icon-right="chevR" :disabled="!canNext" @click="next">
+        {{ t.page_next }}
+      </Btn>
+    </div>
 
     <Sheet
       :open="!!store.detail"
@@ -115,10 +175,10 @@ onMounted(() => void store.load())
             <StatusBadge v-else :status="store.detail.status" />
           </div>
           <div><span class="muted">{{ t.job_by }}</span><span class="mono">{{ store.detail.created_by }}</span></div>
-          <div><span class="muted">{{ t.job_started }}</span><span class="mono">{{ store.detail.started_at.slice(0, 19) }}</span></div>
-          <div><span class="muted">{{ t.job_finished }}</span><span class="mono">{{ store.detail.finished_at ? store.detail.finished_at.slice(0, 19) : '—' }}</span></div>
+          <div><span class="muted">{{ t.job_started }}</span><span class="mono">{{ fmtDateTime(store.detail.started_at) }}</span></div>
+          <div><span class="muted">{{ t.job_finished }}</span><span class="mono">{{ store.detail.finished_at ? fmtDateTime(store.detail.finished_at) : '—' }}</span></div>
           <div><span class="muted">{{ t.job_verified_by }}</span><span class="mono">{{ store.detail.verified_by || '—' }}</span></div>
-          <div><span class="muted">verified_at</span><span class="mono">{{ store.detail.verified_at ? store.detail.verified_at.slice(11, 19) : '—' }}</span></div>
+          <div><span class="muted">{{ t.job_verified_at }}</span><span class="mono">{{ store.detail.verified_at ? fmtDateTime(store.detail.verified_at) : '—' }}</span></div>
         </div>
 
         <div class="jobdet__sec">

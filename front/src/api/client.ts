@@ -24,7 +24,13 @@ import {
   type JRIssuesPage,
   type JRProject,
   type JRProjectPatch,
+  type JRWorklogsResponse,
+  type PasswordChangePayload,
   type Period,
+  type SelfUserPatch,
+  type SyncPrefs,
+  type SyncPrefsPatch,
+  type SyncTri,
   type SyncTriggerResult,
   type TCEntriesResponse,
   type TCProject,
@@ -260,11 +266,55 @@ export const api = {
 
   // --- Tempo / worklog sync tasks ------------------------------------------
 
-  /** GET /worklog-sync-tasks — конвеєр worklog-задач зі зведенням за період. */
-  worklogSyncTasks(period: Period, status?: WorklogStatus): Promise<WorklogSyncTasksResponse> {
-    return request<WorklogSyncTasksResponse>(
-      `/worklog-sync-tasks${qs({ ...period, status })}`,
+  /** GET /jr-worklogs — реальні Tempo-worklog-и з БД за період (вкладка «Tempo»).
+   *  `linked` (стан звʼязку з WST) + пошук `q` за назвою задачі + пагінація. */
+  jrWorklogs(params: {
+    start: string
+    end: string
+    linked?: 'all' | 'linked' | 'unlinked'
+    q?: string
+    limit?: number
+    offset?: number
+  }): Promise<JRWorklogsResponse> {
+    return request<JRWorklogsResponse>(
+      `/jr-worklogs${qs({
+        start: params.start,
+        end: params.end,
+        linked: params.linked,
+        q: params.q,
+        limit: params.limit,
+        offset: params.offset,
+      })}`,
     )
+  },
+
+  /** GET /worklog-sync-tasks — конвеєр worklog-задач зі зведенням за період
+   *  (вкладка «Конвеєр»): фільтр стану `synced` + пошук `q` + пагінація. */
+  worklogSyncTasks(params: {
+    start: string
+    end: string
+    status?: WorklogStatus
+    synced?: SyncTri
+    q?: string
+    limit?: number
+    offset?: number
+  }): Promise<WorklogSyncTasksResponse> {
+    return request<WorklogSyncTasksResponse>(
+      `/worklog-sync-tasks${qs({
+        start: params.start,
+        end: params.end,
+        status: params.status,
+        synced: params.synced,
+        q: params.q,
+        limit: params.limit,
+        offset: params.offset,
+      })}`,
+    )
+  },
+
+  /** POST /sync/worklog-tasks/{id}/push — пуш одного WST (пер-рядкова дія). */
+  pushWorklogTask(id: number): Promise<SyncTriggerResult> {
+    return request<SyncTriggerResult>(`/sync/worklog-tasks/${id}/push`, { method: 'POST' })
   },
 
   /** POST /sync/worklog-tasks/prepare — крок `prepare` конвеєра. */
@@ -330,5 +380,22 @@ export const api = {
   /** DELETE /users/{id}. */
   deleteUser(id: number): Promise<void> {
     return request<void>(`/users/${id}`, { method: 'DELETE' })
+  },
+
+  // --- Self-service профіль (екран «Профіль») ------------------------------
+
+  /** PATCH /users/me — self-edit власних полів (без `email`/`is_active`). */
+  updateMe(body: SelfUserPatch): Promise<UserItem> {
+    return request<UserItem>('/users/me', jsonBody(body, 'PATCH'))
+  },
+
+  /** PATCH /users/me/password — зміна власного пароля (хешування на беку). */
+  changeMyPassword(body: PasswordChangePayload): Promise<{ status: string }> {
+    return request<{ status: string }>('/users/me/password', jsonBody(body, 'PATCH'))
+  },
+
+  /** PATCH /users/me/sync-prefs — часткове оновлення перемикачів автосинку. */
+  updateSyncPrefs(body: SyncPrefsPatch): Promise<SyncPrefs> {
+    return request<SyncPrefs>('/users/me/sync-prefs', jsonBody(body, 'PATCH'))
   },
 }

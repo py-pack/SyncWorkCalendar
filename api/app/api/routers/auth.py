@@ -155,7 +155,9 @@ async def me(
     sync_prefs = normalize_sync_prefs(user.sync_prefs if user else None)
     return CurrentUserResponse(
         username=current.username,
+        email=user.email if user else None,
         worker_key=current.worker_key,
+        is_active=user.is_active if user else True,
         expires_at=datetime.fromtimestamp(current.exp_ts, tz=UTC),
         sync_prefs=sync_prefs,
     )

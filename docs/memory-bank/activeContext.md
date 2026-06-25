@@ -1,11 +1,76 @@
 # Active Context
 
-## Активні зміни: автоматизація Tempo-синку (2026-06-24)
+## Заархівовані зміни: автоматизація Tempo-синку (2026-06-25)
 
-**Зміна 1 `add-celery-auto-linking` — РЕАЛІЗОВАНА (32/32; `validate --strict` OK;
-бекенд-верифікація наживо PASS, нижче). Зміна 2 `rework-tempo-screen` — proposal
-(0/25).** Узгоджено з користувачем: дві вкладки на `/tempo`, дві зміни, beat зі
-специфічним розкладом.
+**Обидві зміни ЗААРХІВОВАНО 2026-06-25** (`openspec archive`, послідовно:
+`add-celery-auto-linking` → `rework-tempo-screen`, у цьому порядку — щоб
+канонічний `/auth/me` спершу отримав `sync_prefs`, а потім `email`/`is_active`).
+Дельти злиті в `openspec/specs/`; `openspec validate --specs --strict` —
+**24/24 OK**. Теки: `archive/2026-06-25-add-celery-auto-linking/`,
+`archive/2026-06-25-rework-tempo-screen/`.
+
+- **Зміна 1 `add-celery-auto-linking`** — 32/32; бекенд-верифікація наживо PASS.
+  Дельти: нові `async-task-queue`/`backend-auto-linking`; MODIFIED
+  `container-orchestration`/`api-sync-triggers`/`api-users-management`/`api-auth`
+  (додав `sync_prefs` у `/auth/me`).
+- **Зміна 2 `rework-tempo-screen`** — 25/26 (єдина невиконана — 6.3 браузерний QA,
+  на користувача); `validate --strict` OK, `npm run build` чисто, backend smoke
+  **24/24** наживо PASS. Дельти: новий `frontend-profile`; MODIFIED
+  `frontend-data-tables`/`api-sync-status`/`api-sync-triggers`/
+  `api-users-management`/`api-auth` (додав `email`+`is_active` у `/auth/me`)/
+  `web-app-shell`. Канонічний `/auth/me` тепер віддає
+  `{username, email, worker_key, is_active, expires_at, sync_prefs}`.
+
+**Лишилось по обох:** git-commit (усе в робочому дереві, незакомічене) + 6.3
+браузерний QA `/tempo`/«Профіль» (на користувача). Узгоджено: дві вкладки на
+`/tempo`, дві зміни, beat зі специфічним розкладом.
+
+### Статус реалізації зміни 2 (`rework-tempo-screen`, 2026-06-25)
+
+Екран `/tempo` переведено під патерн `DataPage` з **двома вкладеними маршрутами**
+(`/tempo/worklogs` ↔ `/tempo/pipeline`, редірект із `/tempo`, як `ProjectsView`):
+вкладка **«Tempo»** (реальні `jr_worklogs`, стан = `is_linked`) і **«Конвеєр
+синку»** (WST, стан = `target_id`). Обидві — `PeriodPicker` + спільний `SyncFilter`
++ пошук за **назвою** задачі (debounce) + серверна пагінація; рядок показує `key`
+**і** `issue_name`; спільні `SyncState`/`SyncFilter` («мова синку»).
+
+- **Backend (без міграції, head лишився `69dde0d17ff2`):** новий `GET /jr-worklogs`
+  (`JRWorklogDAO.list_with_link_state` — `is_linked` через EXISTS на
+  `worklog_sync_tasks.target_id`, `issue_name` join `jr_issues`, scoped по
+  `worker_key`, `linked`/`q`/пагінація; схеми `JRWorklogItem`/`JRWorklogsResponse`);
+  **розширено** `GET /worklog-sync-tasks` (фільтр стану `synced`=`target_id NOT NULL`,
+  пошук `q` за назвою через join `jr_issues`, `issue_name` в items, пагінація +
+  `total`; `summary` лишається по всьому періоду); новий **`POST
+  /sync/worklog-tasks/{id}/push`** (`WorllogSyncTask.push_one` — резолв `issue_id`
+  → дедуп `JRWorklogDAO.find_match` → Tempo create; `400` без `worker_key`, `404`
+  на відсутній id, до створення `api_jobs`); self-service **`PATCH /users/me`**
+  (`SelfUserPatch` — `username`/`worker_key`; `email`/`is_active` → `422` через
+  `extra=forbid`) і **`PATCH /users/me/password`** (`bcrypt`; звірка поточного, для
+  `NULL`-хешу — set першого). **`GET /auth/me` додатково віддає `email`+`is_active`**
+  (read-only для профілю) — додано MODIFIED-дельту `api-auth` до зміни (поза
+  початковим списком capability, але потрібно для read профілю).
+- **Frontend (`npm run build` чисто):** `api/types.ts` (`JRWorklog`/`JRWorklogsResponse`,
+  `issue_name` у WST, `SyncPrefs`, розширений `CurrentUserResponse`, `SelfUserPatch`/
+  `PasswordChangePayload`); `api/client.ts` (`jrWorklogs`, переписаний
+  `worklogSyncTasks` на об'єкт-параметри, `pushWorklogTask`, `updateMe`,
+  `changeMyPassword`, `updateSyncPrefs`); `stores/tables.ts` (стан обох вкладок,
+  `loadJrWorklogs`/`loadWst`/сетери/`pushOneWst`/`syncJrWorklogs`; **прибрано**
+  `loadTempo`/`syncWstPrepare/Resolve/Push`); `stores/auth.ts` (`setSyncPref`
+  оптимістично, `updateMe`, `changeMyPassword`); маршрути/`lib/nav.ts` (група
+  `tempo` з children + `profile` поза навігацією); переписаний `views/TempoView.vue`
+  (контейнер-таби) + `views/tempo/TempoWorklogs.vue`/`TempoPipeline.vue` (пер-рядкова
+  `SyncBtn`→`pushOneWst`, без чекбоксів); `components/tempo/PullWorklogsModal.vue`
+  («Забрати з Tempo»); `views/ProfileView.vue` (дві закладки) +
+  `components/profile/SyncPrefsToggles.vue`; `UserChip` — **один** пункт «Профіль»
+  (прибрано «Налаштування»); i18n (UK+EN), CSS у `data.css`.
+- **Рішення реалізації:** **немає** окремого bulk-попапа «Синхронізувати конвеєр» —
+  пер-рядковий пуш (D4) його заміняє; кроки `prepare/resolve/push` більше не
+  експонуються (поглинає автоматика/per-id). Профіль читає `email`/`is_active` з
+  розширеного `/auth/me`; пароль-форма показує «поточний» як опційний (бек сам
+  вирішує set-first vs change за наявністю хешу). Дефолт періоду обох вкладок —
+  «цей місяць» (`defaultReviewPeriod`).
+- **Лишилось:** 6.3 браузерний QA (інтерактивно, на користувача) + git-commit
+  (зміну вже **заархівовано** 2026-06-25).
 
 ### Статус реалізації зміни 1 (`add-celery-auto-linking`, 2026-06-24)
 

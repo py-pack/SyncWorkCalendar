@@ -13,6 +13,7 @@ import {
   ApiError,
   type JRIssue,
   type JRProject,
+  type JRWorklog,
   type Period,
   type SyncTri,
   type TCEntry,
@@ -21,7 +22,12 @@ import {
   type WorklogStatus,
   type WorklogSyncTask,
 } from '@/api/types'
-import { defaultIssuePeriod, defaultReviewPeriod, reviewPeriod, syncPeriod } from '@/lib/period'
+import { defaultIssuePeriod, defaultReviewPeriod } from '@/lib/period'
+
+/** SyncTri (вкладка «Tempo») → параметр `linked` ендпоінта `/jr-worklogs`. */
+function linkedParam(tri: SyncTri): 'all' | 'linked' | 'unlinked' {
+  return tri === 'synced' ? 'linked' : tri === 'unsynced' ? 'unlinked' : 'all'
+}
 
 function errMsg(e: unknown): string {
   if (e instanceof ApiError) return e.detail
@@ -29,10 +35,6 @@ function errMsg(e: unknown): string {
 }
 
 export const useTablesStore = defineStore('tables', () => {
-  // Читання — широке вікно (щоб дані показувались самі); синк — поточний місяць.
-  const period = reviewPeriod()
-  const sync = syncPeriod()
-
   // TimeCamp проекти (екран «Проекти»)
   const tcProjects = ref<TCProject[]>([])
   const tcProjectsLoaded = ref(false)
@@ -64,9 +66,27 @@ export const useTablesStore = defineStore('tables', () => {
   const jrLoading = ref(false)
   const jrStatusOptions = ref<string[]>([]) // наповнюється раз із /jr-issues/statuses
   const jrStatusLoaded = ref(false)
-  // Tempo / worklog sync tasks
+  // Tempo screen — спільний розмір сторінки обох вкладок.
+  const TEMPO_PAGE_SIZE = 50
+  // Вкладка «Tempo»: реальні Tempo-worklog-и (`GET /jr-worklogs`); стан синку =
+  // звʼязаний із нашим WST (`is_linked`). Читання з БД + явна дія «Забрати з Tempo».
+  const jrWorklogs = ref<JRWorklog[]>([])
+  const tempoPeriod = ref<Period>(defaultReviewPeriod())
+  const tempoLinkFilter = ref<SyncTri>('all')
+  const tempoQuery = ref('')
+  const tempoOffset = ref(0)
+  const tempoTotal = ref(0)
+  const tempoLoading = ref(false)
+  // Вкладка «Конвеєр»: `worklog_sync_tasks` (`GET /worklog-sync-tasks`); стан
+  // синку = запушено в Tempo (`target_id`). Пер-рядковий пуш замість чекбоксів.
   const wst = ref<WorklogSyncTask[]>([])
   const wstSummary = ref<Record<WorklogStatus, number> | null>(null)
+  const wstPeriod = ref<Period>(defaultReviewPeriod())
+  const wstSyncFilter = ref<SyncTri>('all')
+  const wstQuery = ref('')
+  const wstOffset = ref(0)
+  const wstTotal = ref(0)
+  const wstLoading = ref(false)
 
   const error = ref<string | null>(null)
 
@@ -218,14 +238,122 @@ export const useTablesStore = defineStore('tables', () => {
     return loadJrIssues()
   }
 
-  async function loadTempo(): Promise<void> {
+  // ---- Tempo: вкладка «Tempo» (реальні jr_worklogs, read з БД) ----
+
+  /** Вкладка «Tempo»: реальні Tempo-worklog-и за період/фільтр/сторінку
+   *  (`GET /jr-worklogs`). Лише читання — синк окремою дією «Забрати з Tempo». */
+  async function loadJrWorklogs(): Promise<void> {
     error.value = null
+    tempoLoading.value = true
     try {
-      const res = await api.worklogSyncTasks(period)
-      wst.value = res.items
-      wstSummary.value = res.summary
+      const res = await api.jrWorklogs({
+        start: tempoPeriod.value.start,
+        end: tempoPeriod.value.end,
+        linked: linkedParam(tempoLinkFilter.value),
+        q: tempoQuery.value || undefined,
+        limit: TEMPO_PAGE_SIZE,
+        offset: tempoOffset.value,
+      })
+      jrWorklogs.value = res.items
+      tempoTotal.value = res.total
     } catch (e) {
       error.value = errMsg(e)
+    } finally {
+      tempoLoading.value = false
+    }
+  }
+
+  function setTempoPeriod(p: Period): Promise<void> {
+    tempoPeriod.value = p
+    tempoOffset.value = 0
+    return loadJrWorklogs()
+  }
+  function setTempoLinkFilter(f: SyncTri): Promise<void> {
+    tempoLinkFilter.value = f
+    tempoOffset.value = 0
+    return loadJrWorklogs()
+  }
+  function setTempoQuery(q: string): Promise<void> {
+    tempoQuery.value = q
+    tempoOffset.value = 0
+    return loadJrWorklogs()
+  }
+  function setTempoOffset(offset: number): Promise<void> {
+    const max = Math.max(0, tempoTotal.value - 1)
+    tempoOffset.value = Math.min(Math.max(0, offset), max)
+    return loadJrWorklogs()
+  }
+
+  /** «Забрати з Tempo» — тягне `jr_worklogs` із сервера за період і перечитує
+   *  вкладку з БД (`POST /sync/jira/worklogs` → `GET /jr-worklogs`). */
+  async function syncJrWorklogs(period: Period): Promise<void> {
+    error.value = null
+    try {
+      await api.syncJrWorklogs(period)
+      await loadJrWorklogs()
+    } catch (e) {
+      error.value = errMsg(e)
+      throw e // щоб попап синку показав помилку
+    }
+  }
+
+  // ---- Tempo: вкладка «Конвеєр» (worklog_sync_tasks) ----
+
+  /** Вкладка «Конвеєр»: WST за період/фільтр стану/сторінку
+   *  (`GET /worklog-sync-tasks`). `summary` — по всьому періоду. */
+  async function loadWst(): Promise<void> {
+    error.value = null
+    wstLoading.value = true
+    try {
+      const res = await api.worklogSyncTasks({
+        start: wstPeriod.value.start,
+        end: wstPeriod.value.end,
+        synced: wstSyncFilter.value,
+        q: wstQuery.value || undefined,
+        limit: TEMPO_PAGE_SIZE,
+        offset: wstOffset.value,
+      })
+      wst.value = res.items
+      wstSummary.value = res.summary
+      wstTotal.value = res.total
+    } catch (e) {
+      error.value = errMsg(e)
+    } finally {
+      wstLoading.value = false
+    }
+  }
+
+  function setWstPeriod(p: Period): Promise<void> {
+    wstPeriod.value = p
+    wstOffset.value = 0
+    return loadWst()
+  }
+  function setWstSyncFilter(f: SyncTri): Promise<void> {
+    wstSyncFilter.value = f
+    wstOffset.value = 0
+    return loadWst()
+  }
+  function setWstQuery(q: string): Promise<void> {
+    wstQuery.value = q
+    wstOffset.value = 0
+    return loadWst()
+  }
+  function setWstOffset(offset: number): Promise<void> {
+    const max = Math.max(0, wstTotal.value - 1)
+    wstOffset.value = Math.min(Math.max(0, offset), max)
+    return loadWst()
+  }
+
+  /** Пер-рядковий пуш одного WST у Tempo (`POST /sync/worklog-tasks/{id}/push`)
+   *  + reload конвеєра. Помилку кидає, щоб кнопка рядка показала стан. */
+  async function pushOneWst(id: number): Promise<void> {
+    error.value = null
+    try {
+      await api.pushWorklogTask(id)
+      await loadWst()
+    } catch (e) {
+      error.value = errMsg(e)
+      throw e
     }
   }
 
@@ -306,24 +434,7 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  // ---- Tempo pipeline (ручні дії — мутують Tempo, авто НЕ запускаємо) ----
-
-  async function syncWstPrepare(): Promise<void> {
-    await api.syncWstPrepare(sync)
-    await loadTempo()
-  }
-  async function syncWstResolve(): Promise<void> {
-    await api.syncWstResolve(sync)
-    await loadTempo()
-  }
-  /** «Синхронізувати вибрані» мапиться на period-based push (D4 / Q1). */
-  async function syncWstPush(): Promise<void> {
-    await api.syncWstPush(sync)
-    await loadTempo()
-  }
-
   return {
-    period,
     tcProjects,
     tcProjectsLoaded,
     tcActive,
@@ -347,8 +458,36 @@ export const useTablesStore = defineStore('tables', () => {
     jrLoading,
     jrStatusOptions,
     jrPageSize: JR_PAGE_SIZE,
+    tempoPageSize: TEMPO_PAGE_SIZE,
+    // вкладка «Tempo»
+    jrWorklogs,
+    tempoPeriod,
+    tempoLinkFilter,
+    tempoQuery,
+    tempoOffset,
+    tempoTotal,
+    tempoLoading,
+    loadJrWorklogs,
+    setTempoPeriod,
+    setTempoLinkFilter,
+    setTempoQuery,
+    setTempoOffset,
+    syncJrWorklogs,
+    // вкладка «Конвеєр»
     wst,
     wstSummary,
+    wstPeriod,
+    wstSyncFilter,
+    wstQuery,
+    wstOffset,
+    wstTotal,
+    wstLoading,
+    loadWst,
+    setWstPeriod,
+    setWstSyncFilter,
+    setWstQuery,
+    setWstOffset,
+    pushOneWst,
     error,
     loadTcProjects,
     loadJrProjects,
@@ -364,13 +503,9 @@ export const useTablesStore = defineStore('tables', () => {
     setJrQuery,
     setJrOffset,
     syncJrIssuesAll,
-    loadTempo,
     saveTcSync,
     jrIssueSearch,
     saveJrWatched,
     syncProjects,
-    syncWstPrepare,
-    syncWstResolve,
-    syncWstPush,
   }
 })

@@ -221,3 +221,30 @@
 .fsel__opt:hover { background: var(--surface-2); color: var(--text); }
 .fsel__opt.is-on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
 .fsel__opt.is-dim { opacity: .55; }
+
+/* ── Екран Tempo (rework-tempo-screen) ──────────────────────────────────── */
+/* Вкладки рендеряться в .page__body; .pipe-тулбар лишається угорі тіла. */
+.tempotab { display: flex; flex-direction: column; }
+/* Номер + назва задачі в одній комірці (key-pill зліва, назва — стиснено). */
+.tmpissue { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tmpissue__name { color: var(--text-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Екран «Профіль» (frontend-profile) ─────────────────────────────────── */
+.prof { padding: 20px 24px; display: flex; flex-direction: column; gap: 22px; max-width: 560px; }
+.prof__sec { display: flex; flex-direction: column; gap: 14px; }
+.prof__h { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+.prof__hint { margin: 0; color: var(--text-3); font-size: 12.5px; line-height: 1.5; }
+.prof__foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 4px; }
+.prof__foot .sw-btn { height: 38px; }
+.prof__ok { color: var(--ok, #2e9e5b); font-size: 12.5px; }
+
+/* Тумблери синхронізацій */
+.sprefs { display: flex; flex-direction: column; gap: 4px; }
+.sprefs__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 12px 4px; border-bottom: 1px solid var(--border);
+}
+.sprefs__row:last-child { border-bottom: none; }
+.sprefs__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sprefs__label { font-size: 13.5px; color: var(--text); font-weight: 500; }
+.sprefs__hint { font-size: 12px; color: var(--text-3); line-height: 1.4; }

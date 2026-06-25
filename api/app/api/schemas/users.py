@@ -40,6 +40,27 @@ class UserPatch(BaseModel):
     is_active: bool | None = None
 
 
+class SelfUserPatch(BaseModel):
+    """Тіло `PATCH /users/me` (self-edit). `email`/`is_active` свідомо відсутні —
+    `extra="forbid"` відхилить їх `422` (email — Google-ідентичність; is_active —
+    щоб користувач не вимкнув сам себе)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str | None = Field(default=None, min_length=1)
+    worker_key: str | None = None
+
+
+class PasswordChange(BaseModel):
+    """Тіло `PATCH /users/me/password`. `current_password` опційний: для
+    invite-користувача з `NULL`-хешем це **встановлення** першого пароля."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str | None = None
+    new_password: str = Field(min_length=1)
+
+
 class SyncPrefs(BaseModel):
     """Повний об'єкт per-user перемикачів автосинку (відповідь з дефолтами)."""
 

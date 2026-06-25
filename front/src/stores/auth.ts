@@ -8,7 +8,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { api } from '@/api/client'
-import type { CurrentUserResponse, GoogleAuthPayload } from '@/api/types'
+import type {
+  CurrentUserResponse,
+  GoogleAuthPayload,
+  PasswordChangePayload,
+  SelfUserPatch,
+  SyncPrefs,
+} from '@/api/types'
 import { useStored } from '@/lib/storage'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -43,5 +49,48 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser.value = null
   }
 
-  return { token, currentUser, isAuthed, login, loginWithGoogle, refresh, fetchMe, logout }
+  // ---- Профіль (self-service) ----
+
+  /** Перемикач одного ключа `sync_prefs` з оптимістичним оновленням і відкатом
+   *  на помилку. Дефолт усього — `false` (автосинк opt-in). */
+  async function setSyncPref(key: keyof SyncPrefs, value: boolean): Promise<void> {
+    const u = currentUser.value
+    if (!u) return
+    const prev = u.sync_prefs[key]
+    u.sync_prefs = { ...u.sync_prefs, [key]: value }
+    try {
+      u.sync_prefs = await api.updateSyncPrefs({ [key]: value })
+    } catch (e) {
+      u.sync_prefs = { ...u.sync_prefs, [key]: prev }
+      throw e
+    }
+  }
+
+  /** Self-edit власних полів (`username`/`worker_key`) + локальне оновлення. */
+  async function updateMe(patch: SelfUserPatch): Promise<void> {
+    const updated = await api.updateMe(patch)
+    if (currentUser.value) {
+      currentUser.value.username = updated.username
+      currentUser.value.worker_key = updated.worker_key
+    }
+  }
+
+  /** Зміна власного пароля (хешування на беку). */
+  async function changeMyPassword(payload: PasswordChangePayload): Promise<void> {
+    await api.changeMyPassword(payload)
+  }
+
+  return {
+    token,
+    currentUser,
+    isAuthed,
+    login,
+    loginWithGoogle,
+    refresh,
+    fetchMe,
+    logout,
+    setSyncPref,
+    updateMe,
+    changeMyPassword,
+  }
 })

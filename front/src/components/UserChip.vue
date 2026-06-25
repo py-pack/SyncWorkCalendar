@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import Avatar from '@/components/ui/Avatar.vue'
 import Icon from '@/components/ui/Icon.vue'
@@ -12,6 +13,7 @@ defineProps<{ collapsed?: boolean }>()
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const router = useRouter()
 const open = ref(false)
 
 const name = computed(() => auth.currentUser?.username ?? '—')
@@ -31,9 +33,10 @@ const hue = computed(() => {
   return h
 })
 
+// Один пункт «Профіль» → екран профілю (особисті дані + синхронізації);
+// окремого «Налаштування» більше немає (rework-tempo-screen, D6).
 const menuItems = computed<MenuItem[]>(() => [
-  { label: t.value.profile, icon: 'user' },
-  { label: t.value.settings, icon: 'settings' },
+  { label: t.value.profile, icon: 'user', onClick: () => void router.push({ name: 'profile' }) },
   { divider: true },
   { label: t.value.logout, icon: 'logout', danger: true, onClick: () => auth.logout() },
 ])

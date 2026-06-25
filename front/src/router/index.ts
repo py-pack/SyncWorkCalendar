@@ -9,8 +9,11 @@ import JournalView from '@/views/JournalView.vue'
 import ProjectsView from '@/views/ProjectsView.vue'
 import JrProjects from '@/views/projects/JrProjects.vue'
 import TcProjects from '@/views/projects/TcProjects.vue'
+import ProfileView from '@/views/ProfileView.vue'
 import StubView from '@/views/StubView.vue'
 import TempoView from '@/views/TempoView.vue'
+import TempoPipeline from '@/views/tempo/TempoPipeline.vue'
+import TempoWorklogs from '@/views/tempo/TempoWorklogs.vue'
 import TimeCampView from '@/views/TimeCampView.vue'
 import UsersView from '@/views/UsersView.vue'
 
@@ -24,8 +27,11 @@ const SCREEN_COMPONENTS: Record<string, Component> = {
   timecamp: TimeCampView,
   jira: JiraView,
   tempo: TempoView,
+  'tempo-worklogs': TempoWorklogs,
+  'tempo-pipeline': TempoPipeline,
   journal: JournalView,
   users: UsersView,
+  profile: ProfileView,
 }
 
 const pathFor = (item: NavItem): string => item.path ?? `/${item.name}`
@@ -60,6 +66,13 @@ export const router = createRouter({
     // Корінь → останній відкритий екран (зі storage) або calendar.
     { path: '/', redirect: () => ({ name: validScreen(storage.get<string>('ui.route')) }) },
     ...screenRoutes,
+    // Профіль — поза навігацією (доступ через меню user-chip), окремий маршрут.
+    {
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      meta: { titleKey: 'prof_title', icon: 'user' },
+    },
     { path: '/:pathMatch(.*)*', redirect: { name: 'calendar' } },
   ],
 })

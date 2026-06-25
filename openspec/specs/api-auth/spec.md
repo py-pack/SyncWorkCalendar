@@ -6,9 +6,7 @@ JWT-based authentication for the REST API. Logins are validated against the
 `api_users` table; the API never creates users automatically. Issued tokens
 carry user identity and `worker_key` claims, and all non-public routes require
 a valid Bearer token.
-
 ## Requirements
-
 ### Requirement: Login via credentials from `api_users` table
 
 Система SHALL приймати `POST /auth/login` з тілом `{username, password}` і
@@ -130,9 +128,22 @@ DataGrip) або через CLI з майбутньої зміни.
 
 ### Requirement: Current user endpoint
 
-Система SHALL надавати `GET /auth/me`, який повертає `{username, worker_key, expires_at}` із поточного валідного токена.
+Система SHALL надавати `GET /auth/me`, який повертає
+`{username, email, worker_key, is_active, expires_at, sync_prefs}` із поточного
+валідного токена та рядка користувача. Поля `email` і `is_active` додано для
+read-only показу на екрані «Профіль» (`frontend-profile`): self-edit їх **не**
+змінює (`email` — Google-ідентичність, `is_active` — щоб користувач не вимкнув сам
+себе). `sync_prefs` — повний обʼєкт перемикачів автосинку з дефолтами (відсутні
+ключі / `NULL` → `false`).
 
 #### Scenario: Authenticated me
 
 - **WHEN** клієнт `GET /auth/me` із валідним токеном
-- **THEN** відповідь `200 OK` із `{username: <sub>, worker_key: <claim>, expires_at: <ISO 8601>}`
+- **THEN** відповідь `200 OK` із `{username: <sub>, email: <e-mail|null>,
+  worker_key: <claim>, is_active: <bool>, expires_at: <ISO 8601>, sync_prefs: <obj>}`
+
+#### Scenario: Missing or invalid token
+
+- **WHEN** клієнт `GET /auth/me` без `Authorization` або з невалідним токеном
+- **THEN** відповідь `401 Unauthorized`
+

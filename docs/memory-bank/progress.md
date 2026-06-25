@@ -22,9 +22,12 @@
 
 ## Що в роботі (OpenSpec)
 
-- [`add-celery-auto-linking`](../../openspec/changes/add-celery-auto-linking/)
-  — **РЕАЛІЗОВАНА (2026-06-24; 32/32; `validate --strict` OK; бекенд-верифікація
-  наживо PASS; НЕ заархівована).** Backend/інфра: `Celery 5.6`+`Redis`+`beat` у
+- [`add-celery-auto-linking`](../../openspec/changes/archive/2026-06-25-add-celery-auto-linking/)
+  — **ЗААРХІВОВАНО 2026-06-25 (32/32; `validate --strict` OK; бекенд-верифікація
+  наживо PASS). Дельти злиті в `openspec/specs/`: нові
+  `async-task-queue`/`backend-auto-linking`; MODIFIED `container-orchestration`/
+  `api-sync-triggers`/`api-users-management`/`api-auth` (`sync_prefs` у `/auth/me`).**
+  Backend/інфра: `Celery 5.6`+`Redis`+`beat` у
   нових контейнерах `redis`/`worker`/`beat` (redis named volume, host-порт
   **`11332`**; worker `--pool=prefork --max-tasks-per-child=100`). Async→Celery
   місток `app/tasks/celery_bridge.py` (свіжий engine/loop на таску + спільне ядро
@@ -43,21 +46,30 @@
   важкі тригери `?background=true` → enqueue (а не `BackgroundTasks`). 2 нові
   capability `async-task-queue`/`backend-auto-linking`; MODIFIED
   `container-orchestration`/`api-sync-triggers`/`api-users-management`/`api-auth`.
-  Лишилось: фронт-перемикачі `sync_prefs` (зміна 2 `rework-tempo-screen`), архів +
-  git-commit. Деталі — `design.md` + `activeContext.md`.
-- [`rework-tempo-screen`](../../openspec/changes/rework-tempo-screen/)
-  — **proposal (2026-06-24; `validate --strict` OK; 0/25).** Екран `/tempo` під патерн
-  `DataPage`: дві вкладки (`jr_worklogs` / WST-конвеєр), `PeriodPicker`+`SyncFilter`+
+  Фронт-перемикачі `sync_prefs` доставила зміна 2 `rework-tempo-screen`. Лишилось:
+  git-commit. Деталі — `design.md` (у теці архіву) + `activeContext.md`.
+- [`rework-tempo-screen`](../../openspec/changes/archive/2026-06-25-rework-tempo-screen/)
+  — **ЗААРХІВОВАНО 2026-06-25 (25/26 — лишився лише 6.3 браузерний QA; `validate
+  --strict` OK; `npm run build` чисто; backend smoke 24/24 наживо PASS). Дельти злиті
+  в `openspec/specs/`: новий `frontend-profile`; MODIFIED `frontend-data-tables`/
+  `api-sync-status`/`api-sync-triggers`/`api-users-management`/`api-auth`/
+  `web-app-shell`.**
+  Екран `/tempo` під патерн `DataPage`: дві вкладені вкладки (`/tempo/worklogs` —
+  `jr_worklogs`, `/tempo/pipeline` — WST-конвеєр), `PeriodPicker`+`SyncFilter`+
   **пошук за назвою**+пагінація, рядок показує номер **і назву** задачі (`issue_name`),
-  попап з описом дії, усі кнопки зверху, пер-рядкова дія замість чекбоксів
-  (`POST /sync/worklog-tasks/{id}/push`), кнопка «Забрати з Tempo». Новий read `GET
-  /jr-worklogs` + розширення `GET /worklog-sync-tasks` (пагінація/`synced`/`q`/
-  `issue_name`). Меню user-chip — **один** пункт «Профіль» → екран «Профіль» на двох
-  закладках (self-edit `PATCH /users/me` крім `email`/`is_active`; зміна пароля
-  `PATCH /users/me/password`; тумблери `sync_prefs`, дефолт вимкнено). Новий
-  `frontend-profile`; MODIFIED
-  `frontend-data-tables`/`api-sync-status`/`api-sync-triggers`/`api-users-management`/
-  `web-app-shell`. Споживає `sync_prefs` зі зміни вище.
+  пер-рядкова дія замість чекбоксів (`POST /sync/worklog-tasks/{id}/push`), кнопка
+  «Забрати з Tempo» (попап `PullWorklogsModal`). Новий read `GET /jr-worklogs`
+  (`JRWorklogDAO.list_with_link_state`, `is_linked` через EXISTS) + розширення `GET
+  /worklog-sync-tasks` (пагінація/`total`/`synced`/`q`/`issue_name`). Per-id
+  `WorllogSyncTask.push_one` (резолв issue → дедуп → Tempo create). Меню user-chip —
+  **один** пункт «Профіль» → `views/ProfileView.vue` на двох закладках (self-edit
+  `PATCH /users/me` крім `email`/`is_active`→422; зміна/set пароля `PATCH
+  /users/me/password`; тумблери `sync_prefs`, дефолт вимкнено). `GET /auth/me`
+  додатково віддає `email`+`is_active` (read-only профілю). Без bulk-попапа конвеєра
+  (пер-рядковий пуш заміняє, D4). Без міграції (head `69dde0d17ff2`). Новий
+  `frontend-profile`; MODIFIED `frontend-data-tables`/`api-sync-status`/
+  `api-sync-triggers`/`api-users-management`/`api-auth`/`web-app-shell`. Споживає
+  `sync_prefs` зі зміни вище. Лишилось: 6.3 браузерний QA (на користувача) + git-commit.
 
 - [`add-jira-full-issue-pull`](../../openspec/changes/archive/2026-06-23-add-jira-full-issue-pull/)
   — **заархівовано 2026-06-23 (16/16; браузерний QA підтверджено користувачем;

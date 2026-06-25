@@ -11,11 +11,40 @@ export interface TokenResponse {
   expires_in: number // seconds
 }
 
+/** Per-user перемикачі автосинку (= `sync_prefs`; усі ключі, дефолт `false`). */
+export interface SyncPrefs {
+  auto_timecamp_pull: boolean
+  auto_jira_pull: boolean
+  auto_tempo_pull: boolean
+  auto_linking: boolean
+  auto_push_tempo: boolean
+}
+
+/** Часткове оновлення `sync_prefs` (PATCH /users/me/sync-prefs). */
+export type SyncPrefsPatch = Partial<SyncPrefs>
+
 /** Відповідь GET /auth/me. */
 export interface CurrentUserResponse {
   username: string
+  /** read-only на екрані «Профіль» (Google-ідентичність). */
+  email: string | null
   worker_key: string | null
+  /** read-only на екрані «Профіль» (користувач не вимикає сам себе). */
+  is_active: boolean
   expires_at: string // ISO datetime
+  sync_prefs: SyncPrefs
+}
+
+/** Тіло PATCH /users/me (self-edit; без `email`/`is_active`). */
+export interface SelfUserPatch {
+  username?: string
+  worker_key?: string | null
+}
+
+/** Тіло PATCH /users/me/password. `current_password` опційний (invite — set). */
+export interface PasswordChangePayload {
+  current_password?: string | null
+  new_password: string
 }
 
 /** Тіло POST /auth/google — рівно одне поле. */
@@ -159,11 +188,34 @@ export interface WorklogSyncTask {
   content: string | null
   started_at: string
   time_spent: number
+  /** Назва задачі (резолв через `jr_issues`); null — невідома локально. */
+  issue_name: string | null
 }
 
 export interface WorklogSyncTasksResponse {
   summary: Record<WorklogStatus, number>
+  /** Кількість після фільтрів сторінки (для пагінації). */
+  total: number
   items: WorklogSyncTask[]
+}
+
+/** Рядок `GET /jr-worklogs`: реальний Tempo-worklog зі станом звʼязку. */
+export interface JRWorklog {
+  id: number
+  description: string | null
+  started_at: string
+  duration: number
+  jr_issues_id: number
+  issue_key: string | null
+  issue_name: string | null
+  /** Чи звʼязаний worklog із нашим WST-містком (на вкладці «Tempo» = synced). */
+  is_linked: boolean
+}
+
+/** Сторінкована відповідь GET /jr-worklogs (дзеркало `TCEntriesResponse`). */
+export interface JRWorklogsResponse {
+  items: JRWorklog[]
+  total: number
 }
 
 // Calendar (capability api-calendar / frontend-calendar) --------------------

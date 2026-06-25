@@ -3,7 +3,13 @@ from datetime import datetime
 from sqlalchemy import update
 
 from app.core import get_async_asession
-from app.dao import TCProjectDAO, TCEntriesDAO, WorklogSyncTaskDAO, JRIssuesDAO
+from app.dao import (
+    TCProjectDAO,
+    TCEntriesDAO,
+    WorklogSyncTaskDAO,
+    JRIssuesDAO,
+    JRWorklogDAO,
+)
 from app.models import TCProject, TCEntry, WorklogSyncTask, StatusTaskEnum
 from app.services.jira import JiraService
 
@@ -56,6 +62,82 @@ class WorllogSyncTask:
                 task.issue_id = jira_key_dict.get(task.issue_key)
                 task.status = StatusTaskEnum.create
                 await db.commit()
+
+    async def push_one(self, task_id: int, worker: str | None = None) -> dict:
+        """Точковий пуш одного `WorklogSyncTask` у Tempo (пер-рядкова дія екрана).
+
+        Дзеркалить `create_worklogs`, але обмежене одним записом і з дедупом проти
+        `jr_worklogs` (як реконсиляція): якщо worklog уже існує — лінкуємо без
+        HTTP. Якщо `issue_id` ще не зарезолвлено — підтягуємо задачу за ключем.
+        Ідемпотентно: уже-`created`/`updated` запис повертає поточний стан.
+        """
+        actor = worker or settings.current_user
+        async with get_async_asession() as db:
+            wst = await WorklogSyncTaskDAO.find(db, task_id)
+            if wst is None:
+                return {"task_id": task_id, "action": "not_found"}
+
+            # Уже в Tempo → нічого не пушимо (точкова дія ідемпотентна).
+            if wst.status in (StatusTaskEnum.created, StatusTaskEnum.updated):
+                return {
+                    "task_id": task_id,
+                    "status": wst.status.value,
+                    "action": "noop",
+                    "target_id": wst.target_id,
+                }
+
+            # Резолв issue_id, якщо бракує (підтягуємо задачу за ключем).
+            if wst.issue_id is None and wst.issue_key:
+                present = await JRIssuesDAO.get_in_keys(db, {wst.issue_key})
+                if not present:
+                    await UpdateJiraTask().update_jira_issues({wst.issue_key})
+                    present = await JRIssuesDAO.get_in_keys(db, {wst.issue_key})
+                id_by_key = {row.key: row.id for row in present}
+                wst.issue_id = id_by_key.get(wst.issue_key)
+                await db.commit()
+
+            if wst.issue_id is None:
+                return {
+                    "task_id": task_id,
+                    "status": wst.status.value,
+                    "action": "unresolved_issue",
+                }
+
+            # Дедуп проти реальних Tempo-worklog-ів (capability backend-auto-linking).
+            match = await JRWorklogDAO.find_match(
+                db,
+                jr_issues_id=int(wst.issue_id),
+                jr_worker_key=actor,
+                started_at=wst.started_at,
+                duration=wst.time_spent,
+            )
+            if match is not None:
+                wst.target_id = match.id
+                wst.status = StatusTaskEnum.created
+                await db.commit()
+                return {
+                    "task_id": task_id,
+                    "status": "created",
+                    "action": "deduped",
+                    "target_id": match.id,
+                }
+
+            result = self.jira_client.create_worklog(
+                actor,
+                int(wst.issue_id),
+                wst.content,
+                wst.started_at,
+                wst.time_spent,
+            )
+            wst.target_id = result.get("originId")
+            wst.status = StatusTaskEnum.created
+            await db.commit()
+            return {
+                "task_id": task_id,
+                "status": "created",
+                "action": "pushed",
+                "target_id": wst.target_id,
+            }
 
     async def create_worklogs(
         self,

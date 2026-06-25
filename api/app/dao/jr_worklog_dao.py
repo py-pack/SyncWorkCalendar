@@ -1,12 +1,86 @@
-from datetime import datetime, time
-from sqlalchemy import select, and_
+from datetime import date, datetime, time
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import JRWorklog
+from app.models import JRIssue, JRWorklog, WorklogSyncTask
 from .base_dao import BaseDAO
 
 
 class JRWorklogDAO(BaseDAO):
     model = JRWorklog
+
+    @classmethod
+    async def list_with_link_state(
+        cls,
+        db: AsyncSession,
+        worker_key: str | None,
+        date_from: date,
+        date_to: date,
+        linked: str = "all",
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """Реальні Tempo-worklog-и за період зі станом звʼязку (екран `/tempo`).
+
+        `jr_worklogs` ⋈ `jr_issues` (назва/ключ задачі) + похідний `is_linked`
+        через EXISTS на `worklog_sync_tasks.target_id = jr_worklogs.id` (чи є
+        наш WST-місток на цей worklog). Scoped по `worker_key` (чужі worklog-и не
+        протікають, як `/tc-entries`). Фільтр `linked` (`all|linked|unlinked`),
+        пошук `q` за **назвою** задачі (`ILIKE`), сорт `started_at` спадно,
+        серверна пагінація; `total` — окремий COUNT за тим самим фільтром. Лише
+        читання — без мутацій і нових колонок (D2).
+        """
+        period_lo = datetime.combine(date_from, time.min)
+        period_hi = datetime.combine(date_to, time.max)
+
+        # Звʼязок: чи існує WST-місток, що вказує на цей Tempo-worklog (target_id).
+        linked_exists = (
+            select(WorklogSyncTask.id)
+            .where(WorklogSyncTask.target_id == JRWorklog.id)
+            .exists()
+        )
+
+        conditions = [
+            JRWorklog.jr_worker_key == worker_key,
+            JRWorklog.started_at >= period_lo,
+            JRWorklog.started_at <= period_hi,
+        ]
+        if linked == "linked":
+            conditions.append(linked_exists)
+        elif linked == "unlinked":
+            conditions.append(~linked_exists)
+        if q:
+            conditions.append(JRIssue.name.ilike(f"%{q}%"))
+
+        total = (
+            await db.execute(
+                select(func.count())
+                .select_from(JRWorklog)
+                .outerjoin(JRIssue, JRIssue.id == JRWorklog.jr_issues_id)
+                .where(*conditions)
+            )
+        ).scalar_one()
+
+        stmt = (
+            select(
+                JRWorklog.id,
+                JRWorklog.description,
+                JRWorklog.started_at,
+                JRWorklog.duration,
+                JRWorklog.jr_issues_id,
+                JRIssue.key.label("issue_key"),
+                JRIssue.name.label("issue_name"),
+                linked_exists.label("is_linked"),
+            )
+            .select_from(JRWorklog)
+            .outerjoin(JRIssue, JRIssue.id == JRWorklog.jr_issues_id)
+            .where(*conditions)
+            .order_by(JRWorklog.started_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await db.execute(stmt)).mappings().all()
+        return list(rows), int(total)
 
     @classmethod
     async def find_match(

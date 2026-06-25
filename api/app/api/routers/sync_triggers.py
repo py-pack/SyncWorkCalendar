@@ -27,7 +27,7 @@ from app.api.jobs_wrapper import create_job, run_job
 from app.api.period import current_month
 from app.api.schemas.sync_triggers import IssuesKeysBody, PeriodBody
 from app.core.db_helper import async_session_maker
-from app.dao import APIJobDAO
+from app.dao import APIJobDAO, WorklogSyncTaskDAO
 from app.models import (
     JRIssue,
     JRProject,
@@ -238,6 +238,12 @@ async def _do_wst_resolve(payload: dict[str, Any]) -> dict[str, Any]:
         select(func.count()).select_from(WorklogSyncTask).where(where_create)
     )
     return {"resolved": resolved}
+
+
+async def _do_wst_push_one(payload: dict[str, Any]) -> dict[str, Any]:
+    return await WorllogSyncTask().push_one(
+        payload["task_id"], worker=payload["worker_key"]
+    )
 
 
 async def _do_wst_push(payload: dict[str, Any]) -> dict[str, Any]:
@@ -479,6 +485,41 @@ async def sync_wst_push(
         background=background,
         bg_tasks=bg_tasks,
         work=lambda: _do_wst_push(payload),
+    )
+
+
+@router.post("/worklog-tasks/{task_id}/push")
+async def sync_wst_push_one(
+    task_id: int,
+    current: CurrentUser = Depends(get_current_user),
+    bg_tasks: BackgroundTasks = BackgroundTasks(),
+) -> JSONResponse:
+    """Пуш одного `WorklogSyncTask` за id (пер-рядкова дія екрана `/tempo`).
+
+    Точкова дія — завжди синхронна (без `?background`). `400`, якщо немає
+    `worker_key`; `404`, якщо запису немає (до створення `api_jobs`-рядка). Дедуп
+    проти `jr_worklogs` всередині `push_one`.
+    """
+    if not current.worker_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY
+        )
+    async with async_session_maker() as session:
+        wst = await WorklogSyncTaskDAO.find(session, task_id)
+    if wst is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="worklog sync task not found",
+        )
+
+    payload = {"task_id": task_id, "worker_key": current.worker_key}
+    return await _execute(
+        trigger_name="sync.worklog-tasks.push-one",
+        payload=payload,
+        created_by=current.username,
+        background=False,  # точкова дія завжди синхронна
+        bg_tasks=bg_tasks,
+        work=lambda: _do_wst_push_one(payload),
     )
 
 

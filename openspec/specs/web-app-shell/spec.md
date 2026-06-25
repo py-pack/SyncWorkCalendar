@@ -49,9 +49,10 @@ TBD - created by archiving change add-web-ui-foundation. Update Purpose after ar
 Фронтенд SHALL мати маршрути (`vue-router`) для всіх екранів застосунку:
 `calendar`, **група `projects` із вкладеними `/projects/timecamp` і
 `/projects/jira` (+ редірект `/projects` → `/projects/timecamp`)**, `timecamp`,
-`jira`, `tempo`, `journal`, `users`. Перехід між екранами MUST відбуватися без
-перезавантаження сторінки. Останній відкритий маршрут SHALL відновлюватися
-після перезавантаження.
+`jira`, **група `tempo` із вкладеними `/tempo/worklogs` і `/tempo/pipeline`
+(+ редірект `/tempo` → `/tempo/worklogs`)**, `journal`, `users`, **`profile`**.
+Перехід між екранами MUST відбуватися без перезавантаження сторінки. Останній
+відкритий маршрут SHALL відновлюватися після перезавантаження.
 
 #### Scenario: Перехід між екранами
 
@@ -64,6 +65,17 @@ TBD - created by archiving change add-web-ui-foundation. Update Purpose after ar
 - **WHEN** користувач переходить на `/projects/jira`
 - **THEN** рендериться екран «Проекти» з активною під-вʼюхою Jira-проектів, а
   URL лишається `/projects/jira`
+
+#### Scenario: Вкладений маршрут «Tempo»
+
+- **WHEN** користувач переходить на `/tempo`
+- **THEN** відбувається редірект на `/tempo/worklogs`, а перемикання вкладок веде
+  на `/tempo/worklogs` ↔ `/tempo/pipeline` без перезавантаження
+
+#### Scenario: Маршрут профілю з user-chip
+
+- **WHEN** користувач обирає «Профіль» у меню user-chip
+- **THEN** відкривається маршрут `profile` з екраном профілю
 
 #### Scenario: Відновлення маршруту
 
@@ -85,9 +97,17 @@ TBD - created by archiving change add-web-ui-foundation. Update Purpose after ar
 ### Requirement: User-chip із меню
 
 Оболонка SHALL показувати в навігації картку поточного користувача (аватар,
-ім'я, `worker_key`). Натискання MUST відкривати меню з пунктами «Профіль»,
-«Налаштування», розділювач, «Вийти». Пункт «Вийти» MUST виконувати logout
+ім'я, `worker_key`). Натискання MUST відкривати меню з **єдиним** пунктом
+«Профіль» (веде на маршрут `profile`), розділювач, «Вийти». Окремого пункту
+«Налаштування» більше немає — особисті дані й налаштування синку зведено у дві
+закладки екрана «Профіль» (`frontend-profile`). Пункт «Вийти» MUST виконувати logout
 (`web-auth`).
+
+#### Scenario: Перехід у профіль
+
+- **WHEN** користувач відкриває меню user-chip і натискає «Профіль»
+- **THEN** відкривається маршрут `profile` (екран із закладками «Особисті дані» /
+  «Синхронізації»)
 
 #### Scenario: Вихід через user-chip
 

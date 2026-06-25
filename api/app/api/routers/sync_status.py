@@ -8,14 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_current_user, get_db
 from app.api.period import current_month as _current_month, period_or_400 as _period_or_400
 from app.api.schemas.sync_status import (
+    JRWorklogItem,
+    JRWorklogsResponse,
     TCEntriesResponse,
     TCEntryItem,
     UntrackedEntry,
     WorklogSyncTaskItem,
     WorklogSyncTasksResponse,
 )
-from app.dao import TCEntriesDAO
-from app.models import StatusTaskEnum, TCEntry, TCProject, WorklogSyncTask
+from app.dao import JRWorklogDAO, TCEntriesDAO
+from app.models import JRIssue, StatusTaskEnum, TCEntry, TCProject, WorklogSyncTask
 
 
 router = APIRouter()
@@ -29,9 +31,20 @@ async def list_worklog_sync_tasks(
         "pre_create", "create", "created", "pre_update", "update", "updated", "sync"
     ]
     | None = Query(default=None, alias="status"),
+    synced: Literal["all", "synced", "unsynced"] = Query(default="all"),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     _current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> WorklogSyncTasksResponse:
+    """Конвеєр worklog-sync-tasks за період зі зведенням, фільтрами й пагінацією.
+
+    `summary` рахується по **всьому** періоду (повна картина статусів), а `items`
+    застосовують фільтри сторінки: точний `status`, стан синку `synced`
+    (`target_id IS NOT NULL`) і пошук `q` за **назвою** задачі (`jr_issues`).
+    `total` відображає відфільтровану кількість.
+    """
     period_lo, period_hi = _period_or_400(start, end)
 
     summary_stmt = (
@@ -44,15 +57,39 @@ async def list_worklog_sync_tasks(
     for status_enum, cnt in summary_rows:
         summary[status_enum.value] = int(cnt)
 
-    items_stmt = select(WorklogSyncTask).where(
+    # Фільтри сторінки (status/synced/q) + join jr_issues для issue_name/пошуку.
+    conditions = [
         WorklogSyncTask.started_at >= period_lo,
         WorklogSyncTask.started_at <= period_hi,
-    )
+    ]
     if status_filter is not None:
-        items_stmt = items_stmt.where(WorklogSyncTask.status == StatusTaskEnum(status_filter))
-    items_stmt = items_stmt.order_by(WorklogSyncTask.started_at.desc())
+        conditions.append(WorklogSyncTask.status == StatusTaskEnum(status_filter))
+    if synced == "synced":
+        conditions.append(WorklogSyncTask.target_id.is_not(None))
+    elif synced == "unsynced":
+        conditions.append(WorklogSyncTask.target_id.is_(None))
+    if q:
+        conditions.append(JRIssue.name.ilike(f"%{q}%"))
 
-    items_rows = (await db.execute(items_stmt)).scalars().all()
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(WorklogSyncTask)
+            .outerjoin(JRIssue, JRIssue.key == WorklogSyncTask.issue_key)
+            .where(*conditions)
+        )
+    ).scalar_one()
+
+    items_stmt = (
+        select(WorklogSyncTask, JRIssue.name.label("issue_name"))
+        .select_from(WorklogSyncTask)
+        .outerjoin(JRIssue, JRIssue.key == WorklogSyncTask.issue_key)
+        .where(*conditions)
+        .order_by(WorklogSyncTask.started_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    items_rows = (await db.execute(items_stmt)).all()
     items = [
         WorklogSyncTaskItem(
             id=t.id,
@@ -65,10 +102,62 @@ async def list_worklog_sync_tasks(
             content=t.content,
             started_at=t.started_at,
             time_spent=t.time_spent,
+            issue_name=issue_name,
         )
-        for t in items_rows
+        for t, issue_name in items_rows
     ]
-    return WorklogSyncTasksResponse(summary=cast(dict, summary), items=items)
+    return WorklogSyncTasksResponse(
+        summary=cast(dict, summary), total=int(total), items=items
+    )
+
+
+@router.get("/jr-worklogs", response_model=JRWorklogsResponse)
+async def list_jr_worklogs(
+    start: date | None = Query(default=None),
+    end: date | None = Query(default=None),
+    linked: Literal["all", "linked", "unlinked"] = Query(default="all"),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> JRWorklogsResponse:
+    """Реальні Tempo-worklog-и з локальної БД (`jr_worklogs`) за період.
+
+    Scoped по `worker_key` із JWT (як `/tc-entries`/`/calendar`). Похідне
+    `is_linked` (чи є наш WST-місток на цей worklog) і `issue_name` (резолв через
+    `jr_issues`); фільтр `linked`, пошук `q` за назвою задачі, серверна пагінація.
+    """
+    if start is None or end is None:
+        d_start, d_end = _current_month()
+        start = start or d_start
+        end = end or d_end
+    _period_or_400(start, end)  # лише валідація (400, якщо start > end)
+
+    rows, total = await JRWorklogDAO.list_with_link_state(
+        db,
+        worker_key=current.worker_key,
+        date_from=start,
+        date_to=end,
+        linked=linked,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+    items = [
+        JRWorklogItem(
+            id=r["id"],
+            description=r["description"],
+            started_at=r["started_at"],
+            duration=r["duration"],
+            jr_issues_id=r["jr_issues_id"],
+            issue_key=r["issue_key"],
+            issue_name=r["issue_name"],
+            is_linked=bool(r["is_linked"]),
+        )
+        for r in rows
+    ]
+    return JRWorklogsResponse(items=items, total=total)
 
 
 @router.get("/tc-entries", response_model=TCEntriesResponse)

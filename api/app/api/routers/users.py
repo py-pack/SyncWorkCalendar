@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import hash_password
+from app.api.auth import hash_password, verify_password
 from app.api.deps import CurrentUser, get_current_user, get_db
 from app.api.schemas.users import (
+    PasswordChange,
+    SelfUserPatch,
     SyncPrefs,
     SyncPrefsPatch,
     UserCreate,
@@ -38,6 +40,69 @@ async def patch_my_sync_prefs(
     merged = merge_sync_prefs(user.sync_prefs, patch)
     await APIUserDAO.update(db, user, sync_prefs=merged)
     return SyncPrefs(**merged)
+
+
+@router.patch("/me", response_model=UserItem)
+async def patch_me(
+    body: SelfUserPatch,
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserItem:
+    """Self-edit власних полів (`username`/`worker_key`). `email`/`is_active`
+    відхиляються схемою (`extra=forbid` → 422). Пароль — окремий endpoint."""
+    user = await APIUserDAO.find(db, current.id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="user not found"
+        )
+
+    fields = body.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="body must contain at least one of: username, worker_key",
+        )
+
+    if "username" in fields and await APIUserDAO.username_exists(
+        db, fields["username"], exclude_id=user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="username already exists",
+        )
+
+    await APIUserDAO.update(db, user, **fields)
+    return UserItem.model_validate(user)
+
+
+@router.patch("/me/password")
+async def patch_my_password(
+    body: PasswordChange,
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Зміна власного пароля (через хешування `bcrypt`). Для користувача з
+    наявним хешем звіряємо `current_password`; для invite-користувача з
+    `NULL`-хешем встановлюємо перший пароль (без звірки)."""
+    user = await APIUserDAO.find(db, current.id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="user not found"
+        )
+
+    if user.password_hash:
+        if not body.current_password or not verify_password(
+            body.current_password, user.password_hash
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="current password is incorrect",
+            )
+
+    await APIUserDAO.update(
+        db, user, password_hash=hash_password(body.new_password)
+    )
+    return {"status": "ok"}
 
 
 @router.get("", response_model=list[UserItem])

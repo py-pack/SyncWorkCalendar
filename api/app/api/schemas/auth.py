@@ -34,7 +34,11 @@ class TokenResponse(BaseModel):
 
 class CurrentUserResponse(BaseModel):
     username: str
+    # `email`/`is_active` — для read-only показу на екрані «Профіль»
+    # (rework-tempo-screen); self-edit їх не змінює.
+    email: str | None = None
     worker_key: str | None
+    is_active: bool = True
     expires_at: datetime
     # Per-user перемикачі автосинку з дефолтами (відсутні ключі / NULL → false).
     sync_prefs: dict[str, bool]

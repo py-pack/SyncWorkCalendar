@@ -1,105 +1,67 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+// Контейнер екрана /tempo (rework-tempo-screen, D1). DataPage з двома вкладками
+// (router-agnostic, як ProjectsView): «Tempo» (реальні jr_worklogs) і «Конвеєр
+// синку» (worklog_sync_tasks). Дані вантажить кожна під-вʼюха сама; контейнер дає
+// заголовок, закладки і агрегатну дію «Забрати з Tempo» (лише на вкладці Tempo).
+import { computed, ref } from 'vue'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 
 import DataPage from '@/components/data/DataPage.vue'
-import DataTable from '@/components/data/DataTable.vue'
-import StatusBadge from '@/components/data/StatusBadge.vue'
-import SyncBtn from '@/components/data/SyncBtn.vue'
-import type { Column } from '@/components/data/types'
+import type { TabItem } from '@/components/data/types'
+import PullWorklogsModal from '@/components/tempo/PullWorklogsModal.vue'
 import Btn from '@/components/ui/Btn.vue'
-import { type WorklogStatus } from '@/api/types'
 import { useI18n } from '@/i18n'
-import { secToHm } from '@/lib/format'
 import { useTablesStore } from '@/stores/tables'
 
 const { t } = useI18n()
 const store = useTablesStore()
+const route = useRoute()
+const router = useRouter()
 
-const sel = ref<Set<string | number>>(new Set())
-const pushing = ref(false)
-
-// Реальні стани worklog-sync-task (StatusTaskEnum); 'failed' тут не буває.
-const SUMMARY_STATES: WorklogStatus[] = ['pre_create', 'create', 'created']
-function summaryCount(s: WorklogStatus): number {
-  return store.wstSummary?.[s] ?? 0
-}
-
-const cols = computed<Column[]>(() => [
-  { key: 'issue_key', label: t.value.col_issue, width: 110 },
-  { key: 'content', label: t.value.col_desc },
-  { key: 'worker_key', label: t.value.col_worker, width: 120, mono: true },
-  { key: 'started_at', label: t.value.col_date, width: 120, mono: true },
-  { key: 'time_spent', label: t.value.col_duration, align: 'right', mono: true, width: 90 },
-  { key: 'status', label: t.value.col_status, width: 150 },
-  { key: 'target_id', label: t.value.col_target, align: 'right', mono: true, width: 110 },
+const tabs = computed<TabItem[]>(() => [
+  {
+    id: 'tempo-worklogs',
+    label: t.value.nav_tempo_worklogs,
+    icon: 'sync',
+    count: store.tempoTotal || undefined,
+  },
+  {
+    id: 'tempo-pipeline',
+    label: t.value.nav_tempo_pipeline,
+    icon: 'bolt',
+    count: store.wstTotal || undefined,
+  },
 ])
 
-async function pushSelected(): Promise<void> {
-  if (pushing.value || sel.value.size === 0) return
-  pushing.value = true
-  try {
-    await store.syncWstPush()
-    sel.value = new Set()
-  } finally {
-    pushing.value = false
-  }
-}
+const active = computed<string>(() => (route.name as string) ?? 'tempo-worklogs')
+const desc = computed(() =>
+  active.value === 'tempo-pipeline' ? t.value.tempo_pipeline_desc : t.value.tempo_worklogs_desc,
+)
 
-onMounted(() => void store.loadTempo())
+const pullOpen = ref(false)
+
+function go(name: string): void {
+  if (name !== route.name) void router.push({ name })
+}
 </script>
 
 <template>
-  <DataPage :title="t.tempo_title" :desc="t.tempo_desc" :error="store.error">
-    <template #actions>
-      <Btn
-        size="sm"
-        variant="primary"
-        icon="sync"
-        :disabled="sel.size === 0 || pushing"
-        @click="pushSelected"
-      >
-        {{ t.tbl_sync_selected }}{{ sel.size > 0 ? ` (${sel.size})` : '' }}
+  <DataPage
+    :title="t.tempo_title"
+    :desc="desc"
+    :error="store.error"
+    :tabs="tabs"
+    :active-tab="active"
+    @update:active-tab="go"
+  >
+    <template v-if="active === 'tempo-worklogs'" #actions>
+      <Btn variant="default" size="sm" icon="cloudDown" @click="pullOpen = true">
+        {{ t.tmp_pull }}
       </Btn>
     </template>
 
-    <template #toolbar>
-      <div class="pipe">
-        <div class="pipe__summary">
-          <div v-for="s in SUMMARY_STATES" :key="s" class="pipe__stat">
-            <StatusBadge :status="s" />
-            <b class="mono">{{ summaryCount(s) }}</b>
-          </div>
-        </div>
-        <span class="spacer" />
-        <div class="pipe__steps">
-          <span class="pipe__label mono">pre_create → create → created</span>
-          <SyncBtn label="prepare" icon="bolt" :action="() => store.syncWstPrepare()" />
-          <SyncBtn label="resolve-issues" icon="bolt" :action="() => store.syncWstResolve()" />
-          <SyncBtn label="push-to-tempo" icon="bolt" :action="() => store.syncWstPush()" />
-        </div>
-      </div>
-    </template>
+    <RouterView />
 
-    <DataTable
-      v-model:selected="sel"
-      :columns="cols"
-      :rows="store.wst"
-      :get-id="(r) => r.id"
-      selectable
-      :empty="t.empty"
-    >
-      <template #cell-issue_key="{ row }">
-        <span class="mono key-pill">{{ row.issue_key }}</span>
-      </template>
-      <template #cell-started_at="{ row }">{{ row.started_at.slice(5, 10) }}</template>
-      <template #cell-time_spent="{ row }">{{ secToHm(row.time_spent) }}</template>
-      <template #cell-status="{ row }">
-        <StatusBadge :status="row.status" />
-      </template>
-      <template #cell-target_id="{ row }">
-        <span v-if="row.target_id">#{{ row.target_id }}</span>
-        <span v-else class="faint">—</span>
-      </template>
-    </DataTable>
+    <PullWorklogsModal :open="pullOpen" @close="pullOpen = false" />
   </DataPage>
 </template>

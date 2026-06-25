@@ -103,6 +103,15 @@ class WorllogSyncTask:
                     "action": "unresolved_issue",
                 }
 
+            # Tempo відхиляє нульову тривалість (VALIDATION_FAILED → 400). Не шлемо
+            # такий запис — повертаємо зрозумілий «пропущено» замість помилки.
+            if wst.time_spent <= 0:
+                return {
+                    "task_id": task_id,
+                    "status": wst.status.value,
+                    "action": "skipped_zero_duration",
+                }
+
             # Дедуп проти реальних Tempo-worklog-ів (capability backend-auto-linking).
             match = await JRWorklogDAO.find_match(
                 db,
@@ -157,7 +166,16 @@ class WorllogSyncTask:
                 status=StatusTaskEnum.create
             )
 
+            pushed = skipped = 0
             for wlst in all_tasks:
+                # Tempo відхиляє worklog із нульовою тривалістю
+                # (`timeSpentSeconds must be > 0`, VALIDATION_FAILED → 400).
+                # Пропускаємо такі записи, щоб один нульовий не блокував увесь
+                # пуш періоду (раніше — `KeyError: 0`/500 на першому ж).
+                if wlst.time_spent <= 0:
+                    skipped += 1
+                    continue
+
                 result = self.jira_client.create_worklog(
                     actor,
                     int(wlst.issue_id),
@@ -169,3 +187,6 @@ class WorllogSyncTask:
                 wlst.target_id = result.get('originId')
                 wlst.status = StatusTaskEnum.created
                 await db.commit()
+                pushed += 1
+
+            return {"pushed": pushed, "skipped": skipped, "total": len(all_tasks)}

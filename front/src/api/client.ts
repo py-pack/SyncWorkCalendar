@@ -17,6 +17,7 @@ import {
   type ApiJobDetail,
   type ApiJobListResponse,
   type ApiJobStatus,
+  type VerifyAllResponse,
   type CalendarResponse,
   type CurrentUserResponse,
   type GoogleAuthPayload,
@@ -369,6 +370,18 @@ export const api = {
   /** POST /api-jobs/{id}/verify — підтвердити `needs_verification`. */
   verifyJob(id: string): Promise<ApiJobDetail> {
     return request<ApiJobDetail>(`/api-jobs/${id}/verify`, { method: 'POST' })
+  },
+
+  /** POST /api-jobs/verify-all — масово підтвердити `needs_verification` за
+   *  поточними фільтрами (період за `started_at` + опц. `trigger_name`). */
+  verifyAllJobs(params?: {
+    start?: string
+    end?: string
+    trigger_name?: string
+  }): Promise<VerifyAllResponse> {
+    return request<VerifyAllResponse>(`/api-jobs/verify-all${qs({ ...params })}`, {
+      method: 'POST',
+    })
   },
 
   // --- Users (capability api-users-management) -----------------------------

@@ -7,7 +7,6 @@ import DataTable from '@/components/data/DataTable.vue'
 import FilterSelect from '@/components/data/FilterSelect.vue'
 import PeriodPicker from '@/components/data/PeriodPicker.vue'
 import StatusBadge from '@/components/data/StatusBadge.vue'
-import SyncBtn from '@/components/data/SyncBtn.vue'
 import type { Column } from '@/components/data/types'
 import Badge from '@/components/ui/Badge.vue'
 import Btn from '@/components/ui/Btn.vue'
@@ -43,6 +42,14 @@ const statusOptions = computed(() => [
   { value: 'failed', label: t.value.s_failed },
 ])
 const triggerOptions = SYNC_TRIGGERS.map((tr) => ({ value: tr, label: tr }))
+
+// Зведення лічильників по статусах (з store.summary) — компактні чипи в тулбарі.
+const summaryChips = computed(() => [
+  { key: 'running', tone: 'accent', label: t.value.s_running, count: store.summary.running },
+  { key: 'needs_verification', tone: 'amber', label: t.value.s_needs_verification, count: store.summary.needs_verification },
+  { key: 'verified', tone: 'green', label: t.value.s_verified, count: store.summary.verified },
+  { key: 'failed', tone: 'red', label: t.value.s_failed, count: store.summary.failed },
+])
 
 const cols = computed<Column[]>(() => [
   { key: 'id', label: 'ID', width: 90, mono: true },
@@ -90,7 +97,15 @@ onMounted(() => void store.load())
 <template>
   <DataPage :title="t.jr_journal_title" :desc="t.jr_journal_desc" :error="store.error">
     <template #actions>
-      <SyncBtn :label="t.tbl_refresh" icon="sync" :action="() => store.load()" />
+      <Btn
+        variant="primary"
+        icon="check"
+        :disabled="store.summary.needs_verification === 0"
+        :title="t.job_verify_all_hint"
+        @click="store.verifyAll()"
+      >
+        {{ t.job_verify_all }}
+      </Btn>
     </template>
 
     <template #toolbar>
@@ -110,6 +125,16 @@ onMounted(() => void store.load())
           searchable
           @update:model-value="onTrigger"
         />
+        <div class="jrsum">
+          <span
+            v-for="c in summaryChips"
+            :key="c.key"
+            class="jrsum__chip"
+            :class="`is-${c.tone}`"
+          >
+            <span class="jrsum__dot" />{{ c.label }}<b>{{ c.count }}</b>
+          </span>
+        </div>
       </div>
     </template>
 

@@ -1,8 +1,30 @@
+import logging
+
 import requests
 
 from typing import List, Any
 from .dto import JiraUserDTO, JiraIssueDTO, JiraProjectDTO, JiraWorklogDTO
 from datetime import datetime, date
+
+
+logger = logging.getLogger(__name__)
+
+
+class TempoApiError(RuntimeError):
+    """Jira/Tempo REST повернув помилку — несе статус і тіло відповіді.
+
+    Раніше помилку Tempo (напр. `400 Bad Request`) ковтав `_make_request`
+    (`return {}`), а виклик `worklogs[0]` маскував її беззмістовним
+    `KeyError: 0`. Тепер причину видно: і в `api_jobs.error` (панель Журналу),
+    і в логах.
+    """
+
+    def __init__(self, method: str, path: str, status_code: int | None, body: str):
+        self.status_code = status_code
+        self.body = body
+        super().__init__(
+            f"Tempo/Jira {method} {path} → {status_code}: {body or '<порожнє тіло>'}"
+        )
 
 
 class JiraService:
@@ -203,10 +225,20 @@ class JiraService:
         }
 
         worklogs = self._make_request(
-            "tempo-timesheets/4/worklogs", method="POST", data=data
+            "tempo-timesheets/4/worklogs", method="POST", data=data, raise_on_error=True
         )
 
-        return dict(worklogs[0])
+        # Tempo на успіх повертає непорожній список створених worklog-ів. Будь-яка
+        # помилка вже кинулась як TempoApiError (raise_on_error=True), тож сюди
+        # доходить лише успіх; гард — на несподіваний порожній/інший шейп.
+        if isinstance(worklogs, list) and worklogs:
+            return dict(worklogs[0])
+        if isinstance(worklogs, dict) and worklogs:
+            return dict(worklogs)
+        raise TempoApiError(
+            "POST", "tempo-timesheets/4/worklogs", None,
+            f"несподівана порожня/невалідна відповідь: {worklogs!r}",
+        )
 
     def update_worklog(
         self,
@@ -249,6 +281,7 @@ class JiraService:
         params: dict | None = None,
         data: dict | None = None,
         headers: dict | None = None,
+        raise_on_error: bool = False,
     ) -> dict:
         if headers is None:
             headers = {}
@@ -269,5 +302,23 @@ class JiraService:
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
+            # Тіло відповіді (де Tempo/Jira пояснює причину, напр. 400) раніше
+            # відкидалось. Тепер логуємо його; для write-викликів
+            # (`raise_on_error=True`) — кидаємо TempoApiError, щоб причина дійшла
+            # до `api_jobs.error`/Журналу, а не маскувалась `KeyError: 0`.
+            resp = getattr(e, "response", None)
+            body = ""
+            status = None
+            if resp is not None:
+                status = resp.status_code
+                try:
+                    body = resp.text
+                except Exception:
+                    body = ""
+            logger.error(
+                "Jira/Tempo %s %s failed: %s | status=%s body=%s",
+                method, path, e, status, body,
+            )
+            if raise_on_error:
+                raise TempoApiError(method, path, status, body) from e
             return {}

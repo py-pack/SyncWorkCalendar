@@ -54,6 +54,13 @@ class CeleryConfig(BaseModel):
     # часи зберігаються й порівнюються в UTC. Часи самих тіків — фіксовані
     # константи в коді (`app/celery_app.py`), не конфіг.
     timezone: str = "UTC"
+    # Прибирання `api_jobs` (maintenance-таска `beat.cleanup_api_jobs`):
+    #   auto_verify_days — після скількох днів `needs_verification` авто-стає
+    #     `verified` (`verified_by="system"`); вікно людського огляду свіжих синків;
+    #   job_ttl_days — після скількох днів термінальні (`verified`/`failed`) рядки
+    #     видаляються. `running`/`needs_verification` ніколи не видаляються.
+    auto_verify_days: int = 7
+    job_ttl_days: int = 90
 
 
 class TimeCampConfig(BaseModel):

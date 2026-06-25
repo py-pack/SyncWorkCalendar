@@ -177,7 +177,7 @@ class ReconcileLinksTask:
         self, start_date: datetime, end_date: datetime, worker_key: str
     ) -> dict:
         """Створити/оновити Tempo-worklog-и; дедуп проти `jr_worklogs`."""
-        created = deduped = updated = 0
+        created = deduped = updated = skipped = 0
         async with get_async_asession() as db:
             tasks = await self._actionable_tasks(
                 db, start_date, end_date, worker_key
@@ -185,6 +185,12 @@ class ReconcileLinksTask:
             for t in tasks:
                 if t.issue_id is None:
                     continue  # ключ не зарезолвився — пропускаємо до наступного проходу
+
+                # Tempo відхиляє нульову тривалість (VALIDATION_FAILED → 400) —
+                # не пушимо такий запис, щоб не валити весь прохід реконсиляції.
+                if t.time_spent <= 0:
+                    skipped += 1
+                    continue
 
                 if t.status == StatusTaskEnum.create:
                     match = await JRWorklogDAO.find_match(
@@ -226,7 +232,7 @@ class ReconcileLinksTask:
                     updated += 1
                     await db.commit()
 
-        return {"created": created, "deduped": deduped, "updated": updated}
+        return {"created": created, "deduped": deduped, "updated": updated, "skipped": skipped}
 
     @staticmethod
     async def _actionable_tasks(

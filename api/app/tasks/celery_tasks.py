@@ -7,16 +7,21 @@
 ставлять у чергу глобальні/per-user таски.
 """
 
-from datetime import date, datetime, time, timedelta
+import logging
+from datetime import date, datetime, time, timedelta, UTC
 
 from app.celery_app import celery_app
+from app.config import settings
 from app.core import get_async_asession
 from app.core.utils.sync_prefs import normalize_sync_prefs
-from app.dao import APIUserDAO
+from app.dao import APIJobDAO, APIUserDAO
 from app.tasks.celery_bridge import run_async, run_audited_task
 from app.tasks.jira_update_task import UpdateJiraTask
 from app.tasks.reconcile_task import ReconcileLinksTask
 from app.tasks.time_camp_update_task import TimeCampUpdateTask
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---- хелпери періоду ------------------------------------------------------
@@ -230,3 +235,34 @@ def beat_pull_tempo() -> dict:
         "tempo_queued": tempo_queued,
         "reconcile_queued": reconcile_queued,
     }
+
+
+# ---- maintenance-таска (БЕЗ api_jobs-аудиту) -------------------------------
+
+
+async def _cleanup_api_jobs() -> dict:
+    """Авто-verify старих `needs_verification` + TTL-видалення термінальних.
+
+    Свіжа сесія через місток `run_async` (як решта тасок). На відміну від
+    sync-тасок, **не** обгортається в `api_jobs`-аудит (D3): інакше maintenance
+    плодила б job-и, які сама ж чистить. Лише логує кількості.
+    """
+    now = datetime.now(UTC)
+    verify_before = now - timedelta(days=settings.celery.auto_verify_days)
+    delete_before = now - timedelta(days=settings.celery.job_ttl_days)
+    async with get_async_asession() as db:
+        auto_verified = await APIJobDAO.auto_verify_older_than(db, verify_before)
+        deleted = await APIJobDAO.delete_terminal_older_than(db, delete_before)
+    return {"auto_verified": auto_verified, "deleted": deleted}
+
+
+@celery_app.task(name="beat.cleanup_api_jobs")
+def beat_cleanup_api_jobs() -> dict:
+    """`~02:00`: прибирання журналу `api_jobs` (авто-verify за TTL + TTL-видалення)."""
+    result = run_async(_cleanup_api_jobs)
+    logger.info(
+        "cleanup_api_jobs: auto_verified=%s deleted=%s",
+        result["auto_verified"],
+        result["deleted"],
+    )
+    return result

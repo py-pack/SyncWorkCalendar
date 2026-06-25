@@ -6,7 +6,8 @@
 
 Beat-розклад — **фіксовані константи** (D9): `01:00` витяг TimeCamp+Jira,
 `01:30` витяг Tempo; після кожного витягу диспетчер ставить per-user
-`reconcile_links`. Конфігурується лише таймзона (`APP__CELERY__TIMEZONE`,
+`reconcile_links`. `02:00` — прибирання `api_jobs` (авто-verify + TTL-видалення,
+maintenance без аудиту). Конфігурується лише таймзона (`APP__CELERY__TIMEZONE`,
 дефолт `UTC`); усі часи — в UTC.
 """
 
@@ -43,5 +44,11 @@ celery_app.conf.beat_schedule = {
     "daily-pull-tempo": {
         "task": "beat.pull_tempo",
         "schedule": crontab(hour=1, minute=30),
+    },
+    # Прибирання `api_jobs` після нічних синків: авто-verify старих
+    # needs_verification + TTL-видалення термінальних (capability `async-task-queue`).
+    "daily-cleanup-api-jobs": {
+        "task": "beat.cleanup_api_jobs",
+        "schedule": crontab(hour=2, minute=0),
     },
 }

@@ -266,9 +266,23 @@ export interface ApiJobDetail extends ApiJobSummary {
   error: string | null
 }
 
+/** Зведення лічильників job-ів по статусах за фільтром періоду+тригера. */
+export interface ApiJobStatusSummary {
+  running: number
+  needs_verification: number
+  verified: number
+  failed: number
+}
+
 export interface ApiJobListResponse {
   items: ApiJobSummary[]
   total: number
+  summary: ApiJobStatusSummary
+}
+
+/** Відповідь POST /api-jobs/verify-all — к-сть масово підтверджених. */
+export interface VerifyAllResponse {
+  verified: number
 }
 
 // Users ---------------------------------------------------------------------

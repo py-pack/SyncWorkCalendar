@@ -9,7 +9,9 @@ from app.api.schemas.api_jobs import (
     APIJobDetail,
     APIJobListResponse,
     APIJobStatusLiteral,
+    APIJobStatusSummary,
     APIJobSummary,
+    VerifyAllResponse,
 )
 from app.dao import APIJobDAO
 from app.models import APIJobStatusEnum
@@ -43,10 +45,42 @@ async def list_api_jobs(
         limit=limit,
         offset=offset,
     )
+    # `summary` — за фільтром періоду+тригера, БЕЗ статус-фільтра (повна картина).
+    summary = await APIJobDAO.status_summary(
+        db,
+        trigger_name=trigger_name,
+        start=_to_dt(start),
+        end=_to_dt(end),
+    )
     return APIJobListResponse(
         items=[APIJobSummary.model_validate(it) for it in items],
         total=total,
+        summary=APIJobStatusSummary(**summary),
     )
+
+
+@router.post("/verify-all", response_model=VerifyAllResponse)
+async def verify_all_api_jobs(
+    trigger_name: str | None = Query(default=None),
+    start: date | None = Query(default=None),
+    end: date | None = Query(default=None),
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> VerifyAllResponse:
+    """Масово підтвердити всі `needs_verification` за поточними фільтрами.
+
+    Дзеркалить фільтри `GET /api-jobs` (період за `started_at` + `trigger_name`);
+    `status` завжди `needs_verification`. Один атомарний `UPDATE`,
+    `verified_by` = поточний користувач.
+    """
+    verified = await APIJobDAO.verify_matching(
+        db,
+        trigger_name=trigger_name,
+        start=_to_dt(start),
+        end=_to_dt(end),
+        verified_by=current.username,
+    )
+    return VerifyAllResponse(verified=verified)
 
 
 @router.get("/{job_id}", response_model=APIJobDetail)

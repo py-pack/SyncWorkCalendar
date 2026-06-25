@@ -22,22 +22,45 @@
 
 ## Що в роботі (OpenSpec)
 
-- [`add-api-jobs-cleanup`](../../openspec/changes/add-api-jobs-cleanup/)
+- [`add-api-jobs-retry`](../../openspec/changes/add-api-jobs-retry/)
   — **PROPOSAL (2026-06-25; `validate --strict` OK, 4/4 артефакти).** Будується
-  поверх `rework-journal-screen` (архівувати після неї). Зупиняє безмежне
-  зростання `needs_verification`/`api_jobs` і додає масовий verify + UX. Передумова:
-  від `verified` нічого не залежить (grep-перевірено) — успіхи осідають у
-  `needs_verification` (306). **Рішення:** авто-verify за TTL (Celery-таска
-  закриває `needs_verification` старші за `APP__CELERY__AUTO_VERIFY_DAYS`=7,
-  `verified_by="system"`); TTL-видалення термінальних старших за
-  `APP__CELERY__JOB_TTL_DAYS`=90 (`running`/`needs_verification` не чіпає); кнопку
-  зверху замінено на «Підтвердити всі» (`POST /api-jobs/verify-all` за фільтрами);
-  бейдж `nowrap` + зведення лічильників у тулбарі. **Backend:** `CeleryConfig`
-  +TTL; DAO `verify_matching`/`auto_verify_older_than`/`delete_terminal_older_than`/
-  `status_summary`; `summary` у `GET /api-jobs`; maintenance-таска
-  `beat.cleanup_api_jobs` (**без** `api_jobs`-аудиту) у beat ~`02:00`. **Без
-  alembic** (head `69dde0d17ff2`). Дельти: MODIFIED `api-jobs`/
-  `frontend-sync-journal`, ADDED у `async-task-queue`. Деталі — `design.md` (D1–D7).
+  поверх `add-api-jobs-cleanup` (архівувати після неї). Пер-рядкова кнопка
+  **«Перезапустити»** на `failed`-рядках Журналу (повтор однієї впалої job-и її ж
+  `trigger_name`+`payload`), окрема від верхньої «Підтвердити всі». Виконання
+  **синхронне** (рішення користувача). Backend: `POST /api-jobs/{id}/retry`
+  (`failed`-only→`409`, невідомий тригер→`422`) + спільний реєстр `TRIGGER_WORK`
+  (`trigger_name → _do_*` зі `sync_triggers.py`, +inline-factory для reconcile);
+  нова job-а, стара `failed` не мутується; повертає `APIJobDetail` у обох випадках
+  (повторне падіння — `200`, не `500`). Frontend: `retryJob`/`retry(id)` + кнопка
+  на `failed`-рядку. Без alembic (head `69dde0d17ff2`). Дельти: MODIFIED
+  `api-jobs`/`frontend-sync-journal`. Деталі — `design.md` (D1–D5). Наступне —
+  `/openspec-apply-change`. **Супутньо (поза змінами, незакомічено, наживо PASS):**
+  баг-фікси `jira_service` (не ковтати помилку Tempo: `TempoApiError`+тіло, без
+  `KeyError: 0`) і пропуск `time_spent<=0` у `create_worklogs`/`push_one`/
+  `ReconcileLinksTask._push` (нульова тривалість давала Tempo `400`).
+
+- [`add-api-jobs-cleanup`](../../openspec/changes/add-api-jobs-cleanup/)
+  — **РЕАЛІЗОВАНО 2026-06-25 (19/20 — лишився лише 6.4 браузерний QA, на
+  користувача; `validate --strict` OK; `npm run build` чисто; бекенд верифіковано
+  наживо).** Будується поверх `rework-journal-screen` (архівувати після неї).
+  Зупиняє безмежне зростання `needs_verification`/`api_jobs` і додає масовий verify
+  + UX. **Backend (без alembic, head `69dde0d17ff2`):** `CeleryConfig`
+  +`auto_verify_days=7`/`job_ttl_days=90`; DAO `verify_matching` (атомарний bulk-
+  `UPDATE` за фільтрами)/`auto_verify_older_than` (`verified_by="system"`)/
+  `delete_terminal_older_than` (`verified`/`failed`; `running` авто-виключено CHECK-ом)/
+  `status_summary`; схеми `APIJobStatusSummary`/`VerifyAllResponse` + `summary` у
+  `APIJobListResponse`; роутер — `summary` у `GET /api-jobs` + `POST
+  /api-jobs/verify-all`; maintenance-таска `beat.cleanup_api_jobs` (**без**
+  `api_jobs`-аудиту, D3) + beat-тік `crontab(02:00)`. **Frontend (build чисто):**
+  `ApiJobStatusSummary`/`VerifyAllResponse`/`verifyAllJobs`; `summary`-стан + дія
+  `verifyAll()` у сторі; `JournalView` — прибрано `SyncBtn` «Оновити з джерела»,
+  додано «Підтвердити всі» (дизейбл при `summary.needs_verification===0`) +
+  зведення-чипи; CSS бейдж `nowrap` + чипи; i18n `job_verify_all*`, прибрано мертвий
+  `tbl_refresh`. **Верифіковано наживо:** OpenAPI `verify-all`+`summary`; `GET
+  /api-jobs` → `summary{0,304,7,1}`; `verify-all?nonexistent`→`{verified:0}`; без
+  auth→`401`; DAO синтетика 13/13 PASS (одна транзакція+rollback, реальні рядки
+  недоторкані). Дельти: MODIFIED `api-jobs`/`frontend-sync-journal`, ADDED у
+  `async-task-queue`. Деталі — `design.md` (D1–D7). Лишилось: 6.4 QA + git-commit.
 
 - [`rework-journal-screen`](../../openspec/changes/rework-journal-screen/)
   — **РЕАЛІЗОВАНО 2026-06-25 (14/15 — лишився лише 5.3 браузерний QA, на
@@ -351,7 +374,9 @@
   `add-data-screens`: є CRUD через API (`GET/POST/PATCH/DELETE /users`, invite
   без пароля → Google) + CLI `add_user`. Лишилось окремою зміною
   `add-user-management-cli`: set-password через API, CLI list/deactivate.
-- TTL/cron для старих `api_jobs` — `add-api-jobs-cleanup`.
+- TTL/cron для старих `api_jobs` — **реалізовано** (`add-api-jobs-cleanup`,
+  2026-06-25): авто-verify за віком + TTL-видалення термінальних у beat-таску
+  `beat.cleanup_api_jobs` (`02:00`); лишився браузерний QA + git-commit.
 - RBAC, per-user OAuth-токени на Jira/TimeCamp — окремі майбутні зміни.
 
 ## Поточний стан гілки

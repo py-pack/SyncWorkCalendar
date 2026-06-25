@@ -16,12 +16,17 @@ import {
   ApiError,
   type ApiJobDetail,
   type ApiJobStatus,
+  type ApiJobStatusSummary,
   type ApiJobSummary,
   type Period,
 } from '@/api/types'
 import { defaultReviewPeriod } from '@/lib/period'
 
 const PAGE_SIZE = 50
+
+function emptySummary(): ApiJobStatusSummary {
+  return { running: 0, needs_verification: 0, verified: 0, failed: 0 }
+}
 
 function errMsg(e: unknown): string {
   if (e instanceof ApiError) return e.detail
@@ -31,6 +36,8 @@ function errMsg(e: unknown): string {
 export const useJournalStore = defineStore('journal', () => {
   const jobs = ref<ApiJobSummary[]>([])
   const total = ref(0)
+  // Зведення лічильників по статусах за період+тригер (ігнорує фільтр статусу).
+  const summary = ref<ApiJobStatusSummary>(emptySummary())
   // Дефолт — поточний місяць (журнал — свіжа активність, job-и щодня).
   const period = ref<Period>(defaultReviewPeriod())
   const statusFilter = ref<ApiJobStatus | null>(null)
@@ -63,6 +70,7 @@ export const useJournalStore = defineStore('journal', () => {
       })
       jobs.value = res.items
       total.value = res.total
+      summary.value = res.summary
     } catch (e) {
       error.value = errMsg(e)
     }
@@ -124,9 +132,28 @@ export const useJournalStore = defineStore('journal', () => {
     needsCount.value = Math.max(0, needsCount.value - 1)
   }
 
+  // Масово підтвердити всі `needs_verification` за поточними фільтрами (період +
+  // тригер; `status` завжди needs_verification). Після успіху — релоад списку,
+  // зведення й навбейджа (їх оновлює `load`).
+  async function verifyAll(): Promise<void> {
+    error.value = null
+    try {
+      await api.verifyAllJobs({
+        start: period.value.start,
+        end: period.value.end,
+        trigger_name: triggerFilter.value ?? undefined,
+      })
+    } catch (e) {
+      error.value = errMsg(e)
+      return
+    }
+    await load()
+  }
+
   return {
     jobs,
     total,
+    summary,
     period,
     statusFilter,
     triggerFilter,
@@ -144,5 +171,6 @@ export const useJournalStore = defineStore('journal', () => {
     open,
     close,
     verify,
+    verifyAll,
   }
 })

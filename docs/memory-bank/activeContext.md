@@ -1,12 +1,79 @@
 # Active Context
 
-## Активна зміна (OpenSpec, proposal): `add-api-jobs-cleanup` (2026-06-25)
+## Активна зміна (OpenSpec, proposal): `add-api-jobs-retry` (2026-06-25)
 
 **Створено proposal 2026-06-25 (`openspec validate --strict` OK, 4/4 артефакти).**
-Тека — [`openspec/changes/add-api-jobs-cleanup/`](../../openspec/changes/add-api-jobs-cleanup/).
+Тека — [`openspec/changes/add-api-jobs-retry/`](../../openspec/changes/add-api-jobs-retry/).
+Будується **поверх** `add-api-jobs-cleanup` (спільні `api_jobs.py`/`journal.ts`/
+`JournalView.vue`) — архівувати **після** неї. Мета — пер-рядкова кнопка
+**«Перезапустити»** на `failed`-рядках Журналу (повтор однієї впалої job-и її ж
+`trigger_name`+`payload`), окрема від верхньої «Підтвердити всі».
+
+- **Привід (наживо):** кнопка «Запустити зараз» на push-to-tempo давала `500` —
+  Tempo `400 VALIDATION_FAILED` (`timeSpentSeconds must be > 0`), яку `_make_request`
+  ковтав (`return {}`), а `worklogs[0]` маскував як `KeyError: 0`. Полагоджено
+  окремими баг-фіксами (див. нижче). Лишилась потреба зручно повторювати впалі job-и.
+- **Рішення користувача:** виконання **синхронне** (кнопка чекає підсумок, як інші
+  кнопки синку), без background-черги.
+- **Скоуп (backend):** новий `POST /api-jobs/{job_id}/retry` (`failed`-only → `409`;
+  невідомий тригер → `422`; `404`/`401`); спільний реєстр `TRIGGER_WORK`
+  (`trigger_name → _do_*` зі `sync_triggers.py`, +inline-factory для reconcile, бо
+  він enqueue-only). Синхронне виконання з гарантованим поверненням **нової**
+  `APIJobDetail` у обох випадках (повторне падіння — `200`, не `500`); стара
+  `failed` не мутується. **Без alembic** (head `69dde0d17ff2`).
+- **Скоуп (frontend):** `retryJob(id)` у клієнті; дія `retry(id)` у сторі (→ `load()`
+  + `refreshNeedsCount()`); кнопка «Перезапустити» на `failed`-рядку `JournalView`
+  (НЕ верхня кнопка); i18n `job_retry`.
+- **Дельти:** MODIFIED `api-jobs` (retry-ендпоінт), MODIFIED `frontend-sync-journal`
+  (пер-рядкова «Перезапустити»). «Мова синку» не застосовується. Рішення — `design.md`
+  (D1–D5). Наступний крок — `/openspec-apply-change add-api-jobs-retry`.
+
+### Супутні баг-фікси (поза OpenSpec-змінами, незакомічені, верифіковано наживо)
+
+- **`jira_service.py`:** `_make_request` більше не ковтає помилку Tempo/Jira —
+  логує тіло відповіді й для write-викликів (`raise_on_error=True`) кидає
+  `TempoApiError(status, body)`; `create_worklog` не падає з `KeyError: 0`. Тепер
+  справжня причина (напр. Tempo `400`) видно в `api_jobs.error`/панелі Журналу.
+- **Нульова тривалість → Tempo `400`:** `time_spent <= 0` тепер **пропускається**
+  в усіх трьох шляхах пушу — `WorllogSyncTask.create_worklogs` (bulk, повертає
+  `{pushed, skipped, total}`), `WorllogSyncTask.push_one` (`action:
+  "skipped_zero_duration"`), `ReconcileLinksTask._push` (counter `skipped`). Один
+  нульовий запис більше не валить увесь період. Підтверджено: у JIRAUSER10303 було
+  2 нульові WST у `create`, що блокували 46 валідних.
+
+## Активна зміна (OpenSpec): `add-api-jobs-cleanup` (2026-06-25)
+
+**РЕАЛІЗОВАНО 2026-06-25 (19/20 — лишився лише 6.4 браузерний QA, на користувача;
+`openspec validate --strict` OK; `npm run build` (`vue-tsc`+`vite`) чисто;
+бекенд верифіковано наживо).** Тека —
+[`openspec/changes/add-api-jobs-cleanup/`](../../openspec/changes/add-api-jobs-cleanup/).
 Будується **поверх** `rework-journal-screen` (спільні `JournalView.vue`/
 `journal.ts`/`api_jobs.py`) — архівувати **після** неї. Мета — зупинити безмежне
 зростання `needs_verification`/`api_jobs` і додати масовий verify + UX.
+
+- **Реалізація (backend, без alembic — head `69dde0d17ff2`):** `CeleryConfig`
+  +`auto_verify_days=7`/`job_ttl_days=90`; 4 DAO-методи (`api_job_dao.py`):
+  `verify_matching` (атомарний bulk-`UPDATE` `needs_verification`→`verified` за
+  фільтрами період+тригер), `auto_verify_older_than` (`verified_by="system"`,
+  `finished_at<older_than`), `delete_terminal_older_than` (`DELETE` `verified`/`failed`;
+  `running` авто-виключено CHECK-ом `finished_at_only_when_running`), `status_summary`
+  (`COUNT GROUP BY status`, усі 4 ключі). Схеми `APIJobStatusSummary`/`VerifyAllResponse`
+  + `summary` у `APIJobListResponse`; роутер — `summary` у `GET /api-jobs` (без
+  статус-фільтра) + `POST /api-jobs/verify-all`. Maintenance-таска
+  `beat.cleanup_api_jobs` (**без** аудиту, D3; свіжа сесія через `run_async`) +
+  beat-тік `crontab(02:00)`.
+- **Реалізація (frontend, build чисто):** `api/types.ts`/`client.ts`
+  (`ApiJobStatusSummary`/`VerifyAllResponse`/`verifyAllJobs`); `stores/journal.ts`
+  (`summary`-стан + дія `verifyAll()`); `JournalView.vue` — прибрано `SyncBtn`
+  «Оновити з джерела», додано кнопку «Підтвердити всі» (дизейбл при
+  `summary.needs_verification===0`) + зведення-чипи `.jrsum`; CSS (`.sw-badge`
+  nowrap + чипи); i18n `job_verify_all`/`job_verify_all_hint` (UK+EN), прибрано
+  мертвий `tbl_refresh`.
+- **Верифікація наживо (контейнер `api` hot-reload, head `69dde0d17ff2`):** OpenAPI
+  показує `verify-all` + `summary`; `GET /api-jobs` → `summary{0,304,7,1}`, `status`
+  рядком; `verify-all?trigger_name=nonexistent` → `{verified:0}`; без auth → `401`.
+  DAO на синтетиці **13/13 PASS** (усе в одній транзакції + rollback — реальні 304
+  `needs_verification` недоторкані). Лишилось: 6.4 браузерний QA + git-commit.
 
 - **Передумова:** від статусу `verified` нічого не залежить (grep-перевірено) — це
   суто аудит/лічильник; успішні job-и осідають у `needs_verification` (306) і ніхто

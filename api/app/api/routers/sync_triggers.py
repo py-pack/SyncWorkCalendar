@@ -39,6 +39,7 @@ from app.models import (
 )
 from app.tasks import celery_tasks
 from app.tasks.jira_update_task import UpdateJiraTask
+from app.tasks.reconcile_task import ReconcileLinksTask
 from app.tasks.time_camp_update_task import TimeCampUpdateTask
 from app.tasks.worllog_sync_task import WorllogSyncTask
 
@@ -267,6 +268,42 @@ async def _do_wst_push(payload: dict[str, Any]) -> dict[str, Any]:
         select(func.count()).select_from(WorklogSyncTask).where(where_created)
     )
     return {"pushed": after - before, "total_created_in_period": after}
+
+
+async def _do_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
+    # `reconcile-links` сам по собі лише enqueue-ить Celery-таску, тож готового
+    # `_do_*` у нього немає — реєстр ретраю гонить синхронно ту саму роботу, що й
+    # воркер (`celery_tasks.reconcile_links` → `ReconcileLinksTask().run`).
+    period_lo = datetime.combine(
+        date.fromisoformat(payload["start"]), time.min
+    )
+    period_hi = datetime.combine(date.fromisoformat(payload["end"]), time.max)
+    return await ReconcileLinksTask().run(
+        period_lo, period_hi, payload["worker_key"]
+    )
+
+
+# ---- retry registry ------------------------------------------------------
+
+
+# Спільний реєстр `trigger_name → робота(payload)` для ретраю впалих job-ів
+# (`POST /api-jobs/{id}/retry`). Перевикористовує наявні `_do_*` (жодного
+# дублювання логіки синку); тригери без `payload` обгорнуті lambda, що його
+# ігнорує. `api_jobs.py` імпортує цей реєстр; зворотного імпорту немає, тож
+# циклу не виникає (D2).
+TRIGGER_WORK: dict[str, Callable[[dict[str, Any] | None], Awaitable[dict[str, Any]]]] = {
+    "sync.timecamp.projects": lambda _payload: _do_tc_projects(),
+    "sync.timecamp.entries": _do_tc_entries,
+    "sync.jira.projects": lambda _payload: _do_jr_projects(),
+    "sync.jira.issues": _do_jr_issues,
+    "sync.jira.issues-all": _do_jr_issues_all,
+    "sync.jira.worklogs": _do_jr_worklogs,
+    "sync.worklog-tasks.prepare": _do_wst_prepare,
+    "sync.worklog-tasks.resolve-issues": _do_wst_resolve,
+    "sync.worklog-tasks.push-to-tempo": _do_wst_push,
+    "sync.worklog-tasks.push-one": _do_wst_push_one,
+    "sync.reconcile-links": _do_reconcile,
+}
 
 
 # ---- endpoints -----------------------------------------------------------

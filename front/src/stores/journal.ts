@@ -132,6 +132,21 @@ export const useJournalStore = defineStore('journal', () => {
     needsCount.value = Math.max(0, needsCount.value - 1)
   }
 
+  // Пер-рядковий ретрай впалої job-и: синхронно повторює саме цей рядок його ж
+  // `trigger_name`+`payload` (`POST /api-jobs/{id}/retry`). Після відповіді —
+  // релоад списку+зведення (`load`, він же оновлює навбейдж: нова job-а могла
+  // перейти у `needs_verification`). Помилку — у банер `error`.
+  async function retry(id: string): Promise<void> {
+    error.value = null
+    try {
+      await api.retryJob(id)
+    } catch (e) {
+      error.value = errMsg(e)
+      return
+    }
+    await load()
+  }
+
   // Масово підтвердити всі `needs_verification` за поточними фільтрами (період +
   // тригер; `status` завжди needs_verification). Після успіху — релоад списку,
   // зведення й навбейджа (їх оновлює `load`).
@@ -171,6 +186,7 @@ export const useJournalStore = defineStore('journal', () => {
     open,
     close,
     verify,
+    retry,
     verifyAll,
   }
 })

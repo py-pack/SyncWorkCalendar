@@ -167,6 +167,15 @@ onMounted(() => void store.load())
           >
             {{ t.job_verify }}
           </Btn>
+          <Btn
+            v-else-if="row.status === 'failed'"
+            size="sm"
+            variant="soft"
+            icon="sync"
+            @click.stop="store.retry(row.id)"
+          >
+            {{ t.job_retry }}
+          </Btn>
           <Icon v-else name="chevR" :size="16" />
         </template>
       </DataTable>

@@ -372,6 +372,13 @@ export const api = {
     return request<ApiJobDetail>(`/api-jobs/${id}/verify`, { method: 'POST' })
   },
 
+  /** POST /api-jobs/{id}/retry — синхронно повторити `failed`-job-у її ж
+   *  параметрами. Повертає `APIJobDetail` НОВОЇ job-и (успіх → `needs_verification`,
+   *  повторне падіння → `failed`; синхронна невдача — не `500`). */
+  retryJob(id: string): Promise<ApiJobDetail> {
+    return request<ApiJobDetail>(`/api-jobs/${id}/retry`, { method: 'POST' })
+  },
+
   /** POST /api-jobs/verify-all — масово підтвердити `needs_verification` за
    *  поточними фільтрами (період за `started_at` + опц. `trigger_name`). */
   verifyAllJobs(params?: {

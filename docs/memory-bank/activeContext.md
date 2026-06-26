@@ -1,13 +1,41 @@
 # Active Context
 
-## Активна зміна (OpenSpec, proposal): `add-api-jobs-retry` (2026-06-25)
+## Заархівована зміна: `add-api-jobs-retry` (2026-06-26)
 
-**Створено proposal 2026-06-25 (`openspec validate --strict` OK, 4/4 артефакти).**
-Тека — [`openspec/changes/add-api-jobs-retry/`](../../openspec/changes/add-api-jobs-retry/).
+**ЗААРХІВОВАНО 2026-06-26 (10/11 — лишився лише 3.4 браузерний QA, на користувача;
+`openspec validate --strict` OK; `npm run build` (`vue-tsc`+`vite`) чисто; бекенд
+верифіковано наживо — усі гілки PASS). Дельти ADDED `api-jobs` (retry-ендпоінт) +
+`frontend-sync-journal` (пер-рядкова «Перезапустити») злиті в `openspec/specs/`;
+`validate --specs --strict` — 24/24 OK.**
+Тека — [`archive/2026-06-26-add-api-jobs-retry/`](../../openspec/changes/archive/2026-06-26-add-api-jobs-retry/).
 Будується **поверх** `add-api-jobs-cleanup` (спільні `api_jobs.py`/`journal.ts`/
 `JournalView.vue`) — архівувати **після** неї. Мета — пер-рядкова кнопка
 **«Перезапустити»** на `failed`-рядках Журналу (повтор однієї впалої job-и її ж
 `trigger_name`+`payload`), окрема від верхньої «Підтвердити всі».
+
+- **Реалізація (backend):** `sync_triggers.py` — `_do_reconcile(payload)`
+  (синхронно кличе `ReconcileLinksTask().run` тим же кодом, що й Celery-таска) +
+  реєстр `TRIGGER_WORK` (`trigger_name → робота(payload)`, реюз усіх `_do_*`;
+  тригери без payload обгорнуті `lambda _payload: _do_*()`). `api_jobs.py` — новий
+  `POST /api-jobs/{job_id}/retry` (імпорт `TRIGGER_WORK` зі `sync_triggers`,
+  циклу немає): `404`/`409` (не-`failed`)/`422` (невідомий тригер); `create_job` →
+  `try work(payload)` → `mark_needs_verification`/`mark_failed` у власних сесіях →
+  читає нову job-у через `db` і повертає `APIJobDetail` (`200` в обох випадках).
+- **Реалізація (frontend, build чисто):** `api/client.ts` `retryJob(id)`;
+  `stores/journal.ts` дія `retry(id)` (→ `load()`, який сам оновлює зведення й
+  навбейдж; помилка → банер `error`); `JournalView.vue` — гілка
+  `v-else-if="row.status === 'failed'"` із кнопкою «Перезапустити» (`icon="sync"`,
+  `size="sm"`, `variant="soft"`) поряд із наявною «Підтвердити» на
+  `needs_verification`; i18n `job_retry` (UK «Перезапустити» / EN «Retry»).
+- **Верифікація наживо (контейнер `api`, head `69dde0d17ff2`):** OpenAPI має
+  `/api-jobs/{job_id}/retry`. На **синтетичних** рядках (реальні `failed`-джоби —
+  усі `push-to-tempo`/`reconcile-links`, чий ретрай реально пише в Tempo, тож їх
+  **не** чіпав): happy-path (тригер `sync.worklog-tasks.prepare` на порожньому
+  майбутньому періоді — нуль зовнішніх викликів) → `200`, нова `needs_verification`,
+  стара лишається `failed`; повторне падіння (`sync.timecamp.entries` з невалідним
+  payload `{}`) → `200` з новою `failed` (error `'start'`), **не** `500`; не-`failed`
+  → `409`; невідомий тригер → `422`; без auth → `401`; неіснуючий id → `404`. Усі
+  PASS, синтетику прибрано.
 
 - **Привід (наживо):** кнопка «Запустити зараз» на push-to-tempo давала `500` —
   Tempo `400 VALIDATION_FAILED` (`timeSpentSeconds must be > 0`), яку `_make_request`
@@ -26,7 +54,8 @@
   (НЕ верхня кнопка); i18n `job_retry`.
 - **Дельти:** MODIFIED `api-jobs` (retry-ендпоінт), MODIFIED `frontend-sync-journal`
   (пер-рядкова «Перезапустити»). «Мова синку» не застосовується. Рішення — `design.md`
-  (D1–D5). Наступний крок — `/openspec-apply-change add-api-jobs-retry`.
+  (D1–D5). Лишилось — 3.4 браузерний QA (на користувача) + git-commit; архівувати
+  **після** `add-api-jobs-cleanup`.
 
 ### Супутні баг-фікси (поза OpenSpec-змінами, незакомічені, верифіковано наживо)
 
@@ -41,12 +70,14 @@
   нульовий запис більше не валить увесь період. Підтверджено: у JIRAUSER10303 було
   2 нульові WST у `create`, що блокували 46 валідних.
 
-## Активна зміна (OpenSpec): `add-api-jobs-cleanup` (2026-06-25)
+## Заархівована зміна: `add-api-jobs-cleanup` (2026-06-26)
 
-**РЕАЛІЗОВАНО 2026-06-25 (19/20 — лишився лише 6.4 браузерний QA, на користувача;
+**ЗААРХІВОВАНО 2026-06-26 (19/20 — лишився лише 6.4 браузерний QA, на користувача;
 `openspec validate --strict` OK; `npm run build` (`vue-tsc`+`vite`) чисто;
-бекенд верифіковано наживо).** Тека —
-[`openspec/changes/add-api-jobs-cleanup/`](../../openspec/changes/add-api-jobs-cleanup/).
+бекенд верифіковано наживо). Дельти MODIFIED `api-jobs` (verify-all + `summary` +
+retention) / `frontend-sync-journal` + ADDED у `async-task-queue` злиті в
+`openspec/specs/`.** Тека —
+[`archive/2026-06-26-add-api-jobs-cleanup/`](../../openspec/changes/archive/2026-06-26-add-api-jobs-cleanup/).
 Будується **поверх** `rework-journal-screen` (спільні `JournalView.vue`/
 `journal.ts`/`api_jobs.py`) — архівувати **після** неї. Мета — зупинити безмежне
 зростання `needs_verification`/`api_jobs` і додати масовий verify + UX.
@@ -95,12 +126,14 @@
   `frontend-sync-journal` (кнопка/зведення/nowrap), ADDED у `async-task-queue`
   (планове прибирання). «Мова синку» НЕ застосовується. Рішення — `design.md` (D1–D7).
 
-## Активна зміна (OpenSpec): `rework-journal-screen` (2026-06-25)
+## Заархівована зміна: `rework-journal-screen` (2026-06-26)
 
-**РЕАЛІЗОВАНО 2026-06-25 (14/15 — лишився лише 5.3 браузерний QA, на користувача;
+**ЗААРХІВОВАНО 2026-06-26 (14/15 — лишився лише 5.3 браузерний QA, на користувача;
 `openspec validate --strict` OK; `npm run build` (`vue-tsc`+`vite`) чисто;
-бекенд-фікс верифіковано наживо).** Тека —
-[`openspec/changes/rework-journal-screen/`](../../openspec/changes/rework-journal-screen/).
+бекенд-фікс верифіковано наживо). Дельти MODIFIED `api-jobs` (status→рядок +
+регрес-гард) / `frontend-sync-journal` (період/пагінація/`fmtDate`/`FilterSelect`)
+злиті в `openspec/specs/`.** Тека —
+[`archive/2026-06-26-rework-journal-screen/`](../../openspec/changes/archive/2026-06-26-rework-journal-screen/).
 Мета — полагодити зламаний `/journal` і привести його до спільного формату
 дані-екранів.
 
@@ -475,6 +508,17 @@ OK.** Тека —
 
 ## Дата оновлення
 
+2026-06-26 — **трилогія Журналу заархівована** (`openspec archive`, послідовно в
+порядку залежностей: `rework-journal-screen` → `add-api-jobs-cleanup` →
+`add-api-jobs-retry`). Дельти злиті в `openspec/specs/`; **активних змін немає**,
+`openspec validate --specs --strict` — **24/24 OK**. Головний `api-jobs` тепер має
+вимоги `Bulk verify endpoint`, `Automatic job retention (auto-verify + TTL deletion)`
+і `Retry failed job endpoint`; `frontend-sync-journal` — `Масове підтвердження
+«Підтвердити всі»` і `Перезапуск впалої job-и («Перезапустити»)`; `async-task-queue` —
+`Планове прибирання журналу api_jobs`. По всіх трьох лишився лише браузерний QA
+`/journal` (на користувача) + git-commit. **Супутні баг-фікси** (`jira_service`
+не ковтає Tempo-помилку; пропуск `time_spent<=0`) лишаються незакоміченими в робочому
+дереві поза OpenSpec-змінами.
 2026-06-23 — **зміни `rework-jira-issues-screen` і `add-jira-full-issue-pull`
 заархівовано** (обидві — браузерний QA підтверджено користувачем). Екран `/jira`:
 читання з локальної БД за період **активності** (`updated_at`, дефолт — поточний

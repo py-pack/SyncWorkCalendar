@@ -22,27 +22,39 @@
 
 ## Що в роботі (OpenSpec)
 
-- [`add-api-jobs-retry`](../../openspec/changes/add-api-jobs-retry/)
-  — **PROPOSAL (2026-06-25; `validate --strict` OK, 4/4 артефакти).** Будується
-  поверх `add-api-jobs-cleanup` (архівувати після неї). Пер-рядкова кнопка
-  **«Перезапустити»** на `failed`-рядках Журналу (повтор однієї впалої job-и її ж
-  `trigger_name`+`payload`), окрема від верхньої «Підтвердити всі». Виконання
-  **синхронне** (рішення користувача). Backend: `POST /api-jobs/{id}/retry`
-  (`failed`-only→`409`, невідомий тригер→`422`) + спільний реєстр `TRIGGER_WORK`
-  (`trigger_name → _do_*` зі `sync_triggers.py`, +inline-factory для reconcile);
-  нова job-а, стара `failed` не мутується; повертає `APIJobDetail` у обох випадках
-  (повторне падіння — `200`, не `500`). Frontend: `retryJob`/`retry(id)` + кнопка
-  на `failed`-рядку. Без alembic (head `69dde0d17ff2`). Дельти: MODIFIED
-  `api-jobs`/`frontend-sync-journal`. Деталі — `design.md` (D1–D5). Наступне —
-  `/openspec-apply-change`. **Супутньо (поза змінами, незакомічено, наживо PASS):**
+**Наразі активних OpenSpec-змін немає** (`openspec list` порожній). Нижче — нещодавно
+заархівована трилогія Журналу; дельти злиті в `openspec/specs/`,
+`validate --specs --strict` — 24/24 OK.
+
+- [`add-api-jobs-retry`](../../openspec/changes/archive/2026-06-26-add-api-jobs-retry/)
+  — **ЗААРХІВОВАНО 2026-06-26 (10/11 — лишився лише 3.4 браузерний QA, на
+  користувача; `validate --strict` OK; `npm run build` чисто; бекенд верифіковано
+  наживо — усі гілки PASS; дельти злиті в `openspec/specs/`).** Будувалась поверх
+  `add-api-jobs-cleanup`. Пер-рядкова кнопка **«Перезапустити»** на `failed`-рядках Журналу
+  (повтор однієї впалої job-и її ж `trigger_name`+`payload`), окрема від верхньої
+  «Підтвердити всі». Виконання **синхронне** (рішення користувача). **Backend:**
+  `POST /api-jobs/{id}/retry` (`failed`-only→`409`, невідомий тригер→`422`,
+  `404`/`401`) + спільний реєстр `TRIGGER_WORK` у `sync_triggers.py`
+  (`trigger_name → робота(payload)`, реюз усіх `_do_*` + inline `_do_reconcile`);
+  `create_job`→`try work(payload)`→`mark_needs_verification`/`mark_failed` у власних
+  сесіях, читає нову job-у й повертає `APIJobDetail` (`200` в обох випадках; повторне
+  падіння — не `500`); стара `failed` не мутується. **Frontend:** `retryJob(id)` у
+  клієнті, дія `retry(id)` у сторі (→ `load()`, що оновлює список/зведення/навбейдж),
+  кнопка `v-else-if failed` (`icon="sync"`, `variant="soft"`) поряд із «Підтвердити»;
+  i18n `job_retry`. Без alembic (head `69dde0d17ff2`). **Верифіковано наживо**
+  (синтетичні рядки + прибирання; реальні `failed` — усі `push-to-tempo`/`reconcile`
+  із Tempo-записами, тож не чіпались): happy-path/повторне падіння→`200`/`409`/`422`/
+  `401`/`404` — усі PASS. Дельти: MODIFIED `api-jobs`/`frontend-sync-journal`. Деталі
+  — `design.md` (D1–D5). Лишилось — 3.4 QA + git-commit. **Супутньо (поза змінами,
+  незакомічено, наживо PASS):**
   баг-фікси `jira_service` (не ковтати помилку Tempo: `TempoApiError`+тіло, без
   `KeyError: 0`) і пропуск `time_spent<=0` у `create_worklogs`/`push_one`/
   `ReconcileLinksTask._push` (нульова тривалість давала Tempo `400`).
 
-- [`add-api-jobs-cleanup`](../../openspec/changes/add-api-jobs-cleanup/)
-  — **РЕАЛІЗОВАНО 2026-06-25 (19/20 — лишився лише 6.4 браузерний QA, на
+- [`add-api-jobs-cleanup`](../../openspec/changes/archive/2026-06-26-add-api-jobs-cleanup/)
+  — **ЗААРХІВОВАНО 2026-06-26 (19/20 — лишився лише 6.4 браузерний QA, на
   користувача; `validate --strict` OK; `npm run build` чисто; бекенд верифіковано
-  наживо).** Будується поверх `rework-journal-screen` (архівувати після неї).
+  наживо; дельти злиті в `openspec/specs/`).** Будувалась поверх `rework-journal-screen`.
   Зупиняє безмежне зростання `needs_verification`/`api_jobs` і додає масовий verify
   + UX. **Backend (без alembic, head `69dde0d17ff2`):** `CeleryConfig`
   +`auto_verify_days=7`/`job_ttl_days=90`; DAO `verify_matching` (атомарний bulk-
@@ -62,10 +74,10 @@
   недоторкані). Дельти: MODIFIED `api-jobs`/`frontend-sync-journal`, ADDED у
   `async-task-queue`. Деталі — `design.md` (D1–D7). Лишилось: 6.4 QA + git-commit.
 
-- [`rework-journal-screen`](../../openspec/changes/rework-journal-screen/)
-  — **РЕАЛІЗОВАНО 2026-06-25 (14/15 — лишився лише 5.3 браузерний QA, на
+- [`rework-journal-screen`](../../openspec/changes/archive/2026-06-26-rework-journal-screen/)
+  — **ЗААРХІВОВАНО 2026-06-26 (14/15 — лишився лише 5.3 браузерний QA, на
   користувача; `validate --strict` OK; `npm run build` чисто; бекенд-фікс
-  верифіковано наживо).** Полагоджено зламаний `/journal` (усі `GET/POST
+  верифіковано наживо; дельти злиті в `openspec/specs/`).** Полагоджено зламаний `/journal` (усі `GET/POST
   /api-jobs/**` → **500**) і приведено екран до спільного формату дані-екранів.
   **Корінь 500:** схема `APIJobSummary/Detail` оголошує `status: Literal[str]`, а
   ORM-поле `APIJob.status` — член enum; `model_validate(<ORM>)` (список/деталі/
@@ -374,9 +386,14 @@
   `add-data-screens`: є CRUD через API (`GET/POST/PATCH/DELETE /users`, invite
   без пароля → Google) + CLI `add_user`. Лишилось окремою зміною
   `add-user-management-cli`: set-password через API, CLI list/deactivate.
-- TTL/cron для старих `api_jobs` — **реалізовано** (`add-api-jobs-cleanup`,
-  2026-06-25): авто-verify за віком + TTL-видалення термінальних у beat-таску
-  `beat.cleanup_api_jobs` (`02:00`); лишився браузерний QA + git-commit.
+- TTL/cron для старих `api_jobs` — **реалізовано і заархівовано**
+  (`add-api-jobs-cleanup`, 2026-06-26): авто-verify за віком + TTL-видалення
+  термінальних у beat-таску `beat.cleanup_api_jobs` (`02:00`); лишився браузерний
+  QA + git-commit.
+- Ретрай впалих `api_jobs` — **реалізовано і заархівовано** (`add-api-jobs-retry`,
+  2026-06-26): `POST /api-jobs/{id}/retry` (синхронний повтор `failed`-job-и її ж
+  `trigger_name`+`payload` через реєстр `TRIGGER_WORK`) + пер-рядкова кнопка
+  «Перезапустити» у Журналі; лишився браузерний QA + git-commit.
 - RBAC, per-user OAuth-токени на Jira/TimeCamp — окремі майбутні зміни.
 
 ## Поточний стан гілки

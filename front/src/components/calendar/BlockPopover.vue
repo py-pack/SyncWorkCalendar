@@ -103,6 +103,10 @@ onBeforeUnmount(() => {
         <Badge :tone="meta.tone" soft :icon="meta.icon">{{ t[meta.labelKey] }}</Badge>
       </div>
 
+      <p v-if="block.duplicate" class="pop__dup">
+        <Icon name="alert" :size="13" />{{ t.blk_dup_note }}
+      </p>
+
       <p class="pop__note">
         <Icon name="eye" :size="13" />{{ t.cal_readonly }}
       </p>

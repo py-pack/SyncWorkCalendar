@@ -94,6 +94,35 @@ class APIJobDAO(BaseDAO):
         return job, None
 
     @classmethod
+    async def retry_claim(cls, db: AsyncSession, job_id: uuid.UUID) -> bool:
+        """Атомарний compare-and-swap `failed → running` для ретраю (єдиний guard).
+
+        Один `UPDATE ... WHERE id=:id AND status='failed'` переводить рядок у
+        `running` і скидає поля наслідку (`finished_at`/`error`/`result` → NULL,
+        `started_at` → now), не порушуючи CHECK `finished_at_only_when_not_running`.
+        Повертає `True`, якщо рядок захоплено (`rowcount == 1`), інакше `False`
+        (job-а не `failed`: уже `running` від попереднього кліку, інший статус або
+        її нема). Row-level lock БД робить паралельний клік безпечним — зачепити
+        рядок зможе лише один `UPDATE`, тож одночасно стартує лише один ретрай.
+        """
+        stmt = (
+            update(cls.model)
+            .where(
+                cls.model.id == job_id,
+                cls.model.status == APIJobStatusEnum.failed,
+            )
+            .values(
+                status=APIJobStatusEnum.running,
+                started_at=datetime.now(UTC),
+                finished_at=None,
+                error=None,
+                result=None,
+            )
+        )
+        result = await db.execute(stmt)
+        return int(result.rowcount or 0) == 1
+
+    @classmethod
     async def get_by_id(cls, db: AsyncSession, job_id: uuid.UUID) -> APIJob | None:
         return await db.get(cls.model, job_id)
 

@@ -193,6 +193,9 @@ class ReconcileLinksTask:
                     continue
 
                 if t.status == StatusTaskEnum.create:
+                    # Лінк — джерело правди: `created`/`updated` WST сюди не
+                    # доходять (виключені з `_ACTIONABLE`). find_match — fallback
+                    # за кортежем лише для ще не лінкованого WST (D4).
                     match = await JRWorklogDAO.find_match(
                         db,
                         jr_issues_id=int(t.issue_id),

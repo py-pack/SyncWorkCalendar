@@ -4,7 +4,7 @@ from datetime import datetime, date, UTC
 
 from .base import Base
 
-from sqlalchemy import String, Integer, DateTime, Date, Enum
+from sqlalchemy import String, Integer, DateTime, Date, Enum, ForeignKey
 from sqlalchemy.orm import mapped_column, Mapped
 from sqlalchemy.event import listens_for
 
@@ -22,8 +22,19 @@ class StatusTaskEnum(enum.Enum):
 class WorklogSyncTask(Base):
     status: Mapped[StatusTaskEnum] = mapped_column(
         Enum(StatusTaskEnum, name="worklog_sync_status_task_enum"), nullable=False)
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    target_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)
+    # Місток до TimeCamp-запису (`tc_entries.id`): лише `UNIQUE` (один WST на запис),
+    # БЕЗ FK — історію WST не чіпаємо каскадом при зникненні запису (різні сервіси,
+    # синхронимо за можливості; D3 у `harden-worklog-link`).
+    source_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, unique=True, index=True
+    )
+    # Місток до Tempo-worklog-а (`jr_worklogs.id`): FK із `ON DELETE SET NULL` —
+    # коли worklog зникає з Tempo, лінк занулюється без дангл-посилань (D2).
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("jr_worklogs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     worker_key: Mapped[str] = mapped_column(String, nullable=False)
     issue_key: Mapped[str] = mapped_column(String, nullable=False)
     issue_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)

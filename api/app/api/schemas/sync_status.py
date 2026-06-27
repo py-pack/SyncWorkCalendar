@@ -73,6 +73,62 @@ class JRWorklogsResponse(BaseModel):
     total: int
 
 
+class WorklogDuplicateMember(BaseModel):
+    """Член групи дублів: один реальний Tempo-worklog (`jr_worklogs`)."""
+
+    id: int
+    description: str | None
+    created_at: datetime | None
+    # Чи вказує на цей worklog якийсь `WST.target_id` (явний лінк-місток).
+    is_linked: bool
+
+
+class WorklogDuplicateGroup(BaseModel):
+    """Група дубльованих worklog-ів за ключем дедупу (`find_match`)."""
+
+    jr_issues_id: int
+    started_at: datetime
+    duration: int
+    issue_key: str | None
+    issue_name: str | None
+    count: int
+    members: list[WorklogDuplicateMember]
+
+
+class WorklogDuplicatesResponse(BaseModel):
+    """Відповідь `GET /jr-worklogs/duplicates` — групи з `count > 1`."""
+
+    groups: list[WorklogDuplicateGroup]
+
+
+class WorklogDedupGroup(BaseModel):
+    """Група для чистки — перелік `id` worklog-ів (members із відповіді duplicates)."""
+
+    worklog_ids: list[int]
+
+
+class WorklogDedupRequest(BaseModel):
+    """Тіло `POST /jr-worklogs/dedup` — лише обрані групи (не «всі дублі»)."""
+
+    groups: list[WorklogDedupGroup]
+
+
+class WorklogDedupError(BaseModel):
+    """Помилка видалення одного worklog-а (решта чистки триває далі, D3)."""
+
+    worklog_id: int
+    reason: str
+
+
+class WorklogDedupResponse(BaseModel):
+    """Підсумок чистки `POST /jr-worklogs/dedup`."""
+
+    deleted: int
+    kept: int
+    groups: int
+    errors: list[WorklogDedupError]
+
+
 class UntrackedEntry(BaseModel):
     id: int
     description: str | None

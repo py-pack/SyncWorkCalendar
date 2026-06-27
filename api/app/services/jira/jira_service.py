@@ -274,6 +274,22 @@ class JiraService:
             return dict(result[0]) if result else {}
         return dict(result) if result else {}
 
+    def delete_worklog(self, worklog_id: int, worker: str | None = None) -> None:
+        """Видалити Tempo-worklog (`DELETE tempo-timesheets/4/worklogs/{id}`).
+
+        `worklog_id` — Tempo `originId` (== `JRWorklog.id`). `raise_on_error=True`,
+        тож помилка Tempo (4xx/5xx) **не ковтається**, а піднімається як
+        `TempoApiError` із тілом відповіді (узгоджено з `create_worklog`/
+        `update_worklog`). На успіх Tempo віддає порожнє тіло — `_make_request`
+        його толерує (`{}`). `worker` — для симетрії підпису; видалення адресує
+        worklog лише за `id`.
+        """
+        self._make_request(
+            f"tempo-timesheets/4/worklogs/{worklog_id}",
+            method="DELETE",
+            raise_on_error=True,
+        )
+
     def _make_request(
         self,
         path: str,
@@ -299,6 +315,10 @@ class JiraService:
                 headers=headers,
             )
             response.raise_for_status()
+            # Успішна відповідь без тіла (напр. `DELETE` → 204/порожнє 200) — це
+            # НЕ помилка: повертаємо `{}`, а не валимось на `response.json()`.
+            if not response.content:
+                return {}
             return response.json()
 
         except requests.exceptions.RequestException as e:

@@ -2,9 +2,12 @@
 import { computed } from 'vue'
 
 import Icon from '@/components/ui/Icon.vue'
+import { useI18n } from '@/i18n'
 import { fmtSpan, type PlacedBlock, PXMIN, syncMeta } from '@/lib/calendar'
 import { fmtDur } from '@/lib/format'
 import { projectColors } from '@/styles/palette'
+
+const { t } = useI18n()
 
 // Один блок робочого часу. Read-only: без resize-ручок і drag — лише клік
 // відкриває панель деталей. 3 варіанти (basic/soft/bold) + стани синку
@@ -32,7 +35,7 @@ const classes = computed(() => [
   'blk',
   `blk--${props.variant}`,
   `blk--${props.block.status}`,
-  { 'is-selected': props.selected, 'is-compact': compact.value },
+  { 'is-selected': props.selected, 'is-compact': compact.value, 'is-dup': props.block.duplicate },
 ])
 
 const style = computed<Record<string, string>>(() => {
@@ -70,6 +73,9 @@ const title = computed(() => props.block.description || props.block.issueKey || 
     <div class="blk__top">
       <span class="blk__time mono">{{ fmtSpan(block.spanStart, block.spanEnd) }}</span>
       <span class="blk__corner">
+        <span v-if="block.duplicate" class="blk__dup" :title="t.blk_dup_note">
+          <Icon name="alert" :size="11" :stroke="2.2" />
+        </span>
         <span :class="['blk-state', `blk-state--${block.status}`, `blk-state--${variant}`]" :title="block.status">
           <Icon :name="meta.icon" :size="12" :stroke="2" :fill="block.status === 'synced'" />
         </span>

@@ -1,5 +1,144 @@
 # Active Context
 
+## Заархівована трилогія (OpenSpec): фікс дублів worklog-ів (2026-06-27)
+
+**УСІ ТРИ ЗМІНИ ЗААРХІВОВАНО 2026-06-27** (`openspec archive`, послідовно в порядку
+залежностей #1→#2→#3; усі QA-задачі підтверджено користувачем наживо — «все чудово
+працює»). Дельти злиті в `openspec/specs/`; **активних змін немає**;
+`openspec validate --specs --strict` — **26/26 OK** (нові канонічні capability:
+`worklog-link-integrity`, `api-worklog-dedup`). Теки архіву:
+`archive/2026-06-27-harden-job-retry/`, `archive/2026-06-27-harden-worklog-link/`,
+`archive/2026-06-27-add-worklog-dedup-cleanup/`. Нижче — повний запис реалізації.
+
+**Привід** — реальний інцидент: подвійний клік
+по «Перезапустити» у Журналі (кнопка без візуального відгуку) запускав два паралельні
+синхронні ретраї одного періоду; дедуп (`JRWorklogDAO.find_match`) звіряється з
+дзеркалом `jr_worklogs`, яке `create_worklog` не оновлює, тож обидва проходи писали в
+Tempo → **дублі worklog-ів** (один TimeCamp-запис ↔ кілька Tempo). Глибша причина —
+звʼязок TimeCamp↔Tempo **неявний** (мʼякий місток WST без FK/`UNIQUE`, дедуп по
+кортежу). Розбито на 3 зміни (рішення користувача); **порядок мерджу: #1 → #2 → #3**.
+Усі `validate --strict` OK. **#1 `harden-job-retry` — ЗААРХІВОВАНО (11/11, браузерний
+QA підтверджено; верифіковано наживо — усі гілки PASS);
+#2 `harden-worklog-link` — ЗААРХІВОВАНО (14/14, live-QA re-sync підтверджено;
+alembic `7f8e8dbd1589` застосовано наживо; DB-інваріанти
+й smoke реконсиляції — PASS); #3 `add-worklog-dedup-cleanup` — ЗААРХІВОВАНО (22/22,
+браузерний QA підтверджено; DAO-логіка dedup 22/22, календарний
+прапор 7/7, `delete_worklog`/`_make_request` 5/5 — синтетика проти реальної БД у
+транзакції з ROLLBACK + фейковий Tempo; живі OpenAPI-маршрути/`401`/`CalendarBlock.
+duplicate` — PASS; `npm run build` чисто; **без alembic**, head `7f8e8dbd1589`).**
+
+1. [`harden-job-retry`](../../openspec/changes/harden-job-retry/) (backend+frontend,
+   11 задач) — **РЕАЛІЗОВАНА 10/11** (лишився лише 3.4 браузерний QA `/journal` на
+   користувача; `validate --strict` OK; `npm run build` чисто; бекенд верифіковано
+   наживо). Усуває **першопричину**. `POST /api-jobs/{id}/retry` більше **не
+   створює нову** job-у: атомарний compare-and-swap `failed → running` того самого
+   рядка (новий `APIJobDAO.retry_claim`), другий/паралельний клік під час `running` →
+   `409` (CAS = guard від подвійного запуску). State machine отримує легальний перехід
+   `failed → running` (лише через ретрай). Frontend — pending-стан кнопки
+   «Перезапустити» (спінер + `disabled`). **BREAKING (внутрішньо):** retry повертає
+   той самий `id`, історичний `error` перезаписується. Дельти: MODIFIED `api-jobs`
+   (retry-ендпоінт→in-place + state machine), `frontend-sync-journal` (pending-кнопка).
+   **Без alembic** (head `69dde0d17ff2`). Рішення — `design.md` (D1–D5).
+   **Реалізація:** (backend) `APIJobDAO.retry_claim` (один CAS-`UPDATE ... WHERE
+   id=:id AND status='failed'`, скидає `finished_at`/`error`/`result`→NULL,
+   `started_at`→now, не порушує CHECK `finished_at_only_when_not_running`);
+   переписаний `retry_api_job` — `get_by_id`→404, читає `trigger_name`/`payload` у
+   локалі **до** CAS, `retry_claim`→409, **одразу `db.commit()`** (звільняє row-lock +
+   робить `running` видимим паралельному кліку), невідомий тригер→`mark_failed
+   ("trigger is not retryable")`+422, робота через `TRIGGER_WORK[trigger]` із
+   закриттям **того самого** рядка у власних сесіях (без re-raise→не 500), фінальне
+   читання у **свіжій** сесії (бо `expire_on_commit=False`→`db` тримала б застарілу
+   копію); прибрано виклик/імпорт `create_job`. (frontend) `JournalView.vue` —
+   локальний `retrying: Set<string>` + `onRetry(id)` (guard від подвійного кліку +
+   спінер/`disabled`), бо `store.retry` сам ковтає помилку у банер (тож `SyncBtn`
+   хибно показав би «done» на помилці); `stores/journal.ts → retry(id)` лишився
+   сумісним. **Жива верифікація (синтетичні рядки, прибрано):** happy→200/той
+   самий id/`needs_verification`; повторний/`running`/`needs_verification`→409;
+   404/401/422 (рядок→`failed`+пояснення) — усі PASS.
+2. [`harden-worklog-link`](../../openspec/changes/harden-worklog-link/) (backend+схема,
+   14 задач) — **РЕАЛІЗОВАНА 12/14** (лишилися лише 4.1/4.2 live-QA re-sync на
+   користувача; `validate --strict` OK). Робить місток **явним і забезпеченим БД**.
+   WST: `UNIQUE(source_id)` + FK `target_id → jr_worklogs` `SET NULL`; **на
+   `source_id` — лише `UNIQUE`, без hard-FK** (рішення користувача: різні сервіси,
+   синхронимо за можливості, історію WST не чіпаємо каскадом — жодного `CASCADE`; це
+   й прибирає головний ризик). Дедуп **довіряє** `target_id` (кортеж — fallback для
+   орфанів). **Реалізація:** (модель) `app/models/worklog_sync_task.py` —
+   `source_id` → `unique=True, index=True` (дає **унікальний індекс**
+   `ix_worklog_sync_tasks_source_id`, не окремий `uq_`), `target_id` →
+   `ForeignKey("jr_worklogs.id", ondelete="SET NULL")`. (alembic `7f8e8dbd1589`
+   поверх `69dde0d17ff2`, **застосовано наживо**) — спершу data-fix: дедуп
+   **задвоєних** WST за `source_id` (`ROW_NUMBER` partition, keep `target_id`+
+   найпросунутіший `status`, tie-break min `id` — **0** видалень наживо) + занулення
+   дангл-`target_id` (`NOT IN (SELECT id FROM jr_worklogs)` — **2040** наживо),
+   потім `DROP`+`CREATE UNIQUE` індекс на `source_id` і `CREATE FK target_id`
+   (`SET NULL`); **FK на `source_id` НЕ накладається**; осиротілі за `source_id`
+   **лишаються**; `alembic check` чистий. (дедуп) `JRWorklogDAO.find_match` —
+   логіка незмінна, лише docstring «лінк → fallback кортеж» + коментар у
+   `ReconcileLinksTask._push` (`created`/`updated` поза `_ACTIONABLE`; `push_one`
+   має guard `noop`). **Верифікація:** синтетика (у транзакції з `ROLLBACK`) —
+   `UNIQUE(source_id)` відхиляє дубль / видалення `jr_worklog`→`target_id` NULL /
+   видалення `tc_entry`→WST лишається — **усі PASS**; smoke `ReconcileLinksTask.run`
+   за порожній майбутній період — чисто, нуль зовнішніх викликів. NEW
+   `worklog-link-integrity`; MODIFIED `backend-auto-linking` (дедуп→лінк-first).
+   Рішення — `design.md` (D1–D5).
+3. [`add-worklog-dedup-cleanup`](../../openspec/changes/add-worklog-dedup-cleanup/)
+   (backend+frontend, 22 задачі) — **РЕАЛІЗОВАНА 21/22** (лишився лише 6.5 браузерний
+   QA на користувача). Прибирає **наявні** дублі + видимість; **будується на #2**
+   (надійний `target_id` + `ON DELETE SET NULL`). Нова capability `api-worklog-dedup`:
+   `GET /jr-worklogs/duplicates` (групи за ключем дедупу, `HAVING count>1`, за період)
+   + `POST /jr-worklogs/dedup` (лишити один — канонічний за `WST.target_id`, інакше min
+   `id` — **реально видалити решту з Tempo** новим `JiraService.delete_worklog`;
+   перелінк WST → DELETE → чистка дзеркала; обгорнуто в `run_job`). Третя закладка
+   **«Дублі»** на «Профілі» (перелік груп + масовий фікс + кнопка «Оновити з Tempo»
+   перед чисткою). Календар — похідний прапор `duplicate` на блоці (`GET /calendar`) +
+   візуальний маркер + **фільтр «лише дублі»**. Незворотне видалення в Tempo. Дельти:
+   NEW `api-worklog-dedup`; MODIFIED `frontend-profile` (2→3 закладки),
+   `api-calendar`/`frontend-calendar`. **Без alembic** (дублі — `GROUP BY`; head
+   `7f8e8dbd1589`). Рішення — `design.md` (D1–D8).
+   **Реалізація (backend):** `JRWorklogDAO` — `find_duplicate_groups` (підзапит
+   `GROUP BY (jr_issues_id, started_at, duration) HAVING count>1` scoped по
+   `worker_key`, join `jr_issues`, члени з `is_linked` через EXISTS на `WST.target_id`;
+   `worker_key=None`→`[]`) + хелпери чистки `linked_target_ids`/`choose_canonical`
+   (єдиний лінкований, інакше min `id`)/`get_by_ids`/`repoint_links`
+   (`UPDATE WST SET target_id`)/`delete_by_ids`. `JiraService.delete_worklog`
+   (`DELETE tempo-timesheets/4/worklogs/{id}`, `raise_on_error=True`); `_make_request`
+   тепер толерує **порожнє успішне тіло** (`204`/empty `200`→`{}`, не валиться на
+   `.json()`). Оркестрація — новий `app/tasks/dedup_task.py` `WorklogDedupTask.run`
+   (keep-one→fake-safe цикл: `delete_worklog`→на успіх `repoint_links`+`delete_by_ids`,
+   помилка одного→`errors`, не валить усе; `{deleted,kept,groups,errors}`). Ендпоінти —
+   у `sync_status.py` (root-mount): `GET /jr-worklogs/duplicates` (+валідація
+   `_period_or_400`/дефолт `current_month`/`401`) і `POST /jr-worklogs/dedup` (тіло
+   `{groups:[{worklog_ids}]}`, `400` без `worker_key`, `run_job`
+   `worklog.dedup-cleanup`). Календар — `get_calendar_blocks` додатково селектить
+   `wst_target_id`; роутер рахує `dup_ids` через `find_duplicate_groups` і ставить
+   `duplicate=(target_id in dup_ids)`; схема `CalendarBlock.duplicate` (окремий прапор,
+   стани синку незмінні). Схеми у `schemas/sync_status.py`. **Реалізація (frontend,
+   `npm run build` чисто):** `api/types.ts`/`client.ts` (`WorklogDuplicate*`,
+   `WorklogDedupResult`, `worklogDuplicates(period)`, `dedupWorklogs(groups)`);
+   `ProfileView` — 3-я закладка + новий `components/profile/DuplicatesTab.vue`
+   (`PeriodPicker` дефолт `syncPeriod`, групи з членами+чекбокси, «Виправити обрані»+
+   «Оновити з Tempo» зі спінером, підсумок, перезавантаження); календар —
+   `CalendarBlock.duplicate`/`PlacedBlock.duplicate` (проброс у `layoutWeek`),
+   маркер у `CalendarBlock.vue` (амбер-значок+бордюр `is-dup`) і `BlockPopover.vue`,
+   фільтр-чип «лише дублі» (`stores/calendar.ts` `onlyDups`/`toggleOnlyDups`/`hasDups`
+   + `CalendarFilters.vue`); i18n (UK+EN) `prof_tab_dups`/`dup_*`/`cal_only_dups`/
+   `blk_dup_note`; CSS `.dups*` (`data.css`) + `.blk__dup`/`.is-dup`/`.pop__dup`/
+   `.chip--dup` (`calendar.css`). **Верифікація (синтетика проти реальної БД, транзакція
+   + ROLLBACK; HTTP-під-токеном — у браузерному QA, бо форжинг токена заблоковано
+   гардом):** DAO-логіка dedup **22/22** (групи/scope/період/`is_linked`/canonical/
+   repoint/delete-after-success/error→`errors`), календарний прапор **7/7**
+   (дубль→`true`, унікальний/без-WST→`false`, стани незмінні), `delete_worklog`/
+   `_make_request` **5/5** (порожнє тіло→успіх, `4xx`→`TempoApiError` з тілом); живі
+   OpenAPI-маршрути + `401` без токена + `CalendarBlock.duplicate` у схемі — PASS.
+
+**Узгоджені рішення користувача (AskUserQuestion):** (1) ретрай — **рестарт на місці**
+(не нова джоба), CAS `failed→running`, 409 на другий клік; (2) масовий фікс —
+**реальне видалення з Tempo**; (3) явний звʼязок — **зміцнити WST**: `UNIQUE(source_id)`
++ FK `target_id (SET NULL)`, **без** FK/CASCADE на `source_id` (історію не чіпаємо),
+не прямий FK у `jr_worklogs` (дзеркало); (4) пакування — **3 зміни** в порядку
+#1→#2→#3; (5) на сторінці дублів — кнопка «Оновити з Tempo»; (6) на календарі —
+фільтр «лише дублі».
+
 ## Заархівована зміна: `add-api-jobs-retry` (2026-06-26)
 
 **ЗААРХІВОВАНО 2026-06-26 (10/11 — лишився лише 3.4 браузерний QA, на користувача;
@@ -508,6 +647,17 @@ OK.** Тека —
 
 ## Дата оновлення
 
+2026-06-27 — **трилогія «фікс дублів worklog-ів» заархівована** (`openspec archive`,
+послідовно в порядку залежностей: `harden-job-retry` → `harden-worklog-link` →
+`add-worklog-dedup-cleanup`; усі QA підтверджено користувачем наживо). Дельти злиті в
+`openspec/specs/`; **активних змін немає**, `openspec validate --specs --strict` —
+**26/26 OK**. Нові канонічні capability: `worklog-link-integrity` (WST `UNIQUE(source_id)`
++ FK `target_id SET NULL`), `api-worklog-dedup` (`GET /jr-worklogs/duplicates` +
+`POST /jr-worklogs/dedup` + `JiraService.delete_worklog`); MODIFIED `api-jobs`
+(retry→in-place CAS), `frontend-sync-journal`, `backend-auto-linking` (дедуп→лінк-first),
+`api-calendar`/`frontend-calendar` (прапор `duplicate` + маркер + фільтр «лише дублі»),
+`frontend-profile` (3-я закладка «Дублі»). Alembic head — `7f8e8dbd1589`. Незакоміченим
+у робочому дереві лишається код усіх трьох змін (git-commit — на користувача).
 2026-06-26 — **трилогія Журналу заархівована** (`openspec archive`, послідовно в
 порядку залежностей: `rework-journal-screen` → `add-api-jobs-cleanup` →
 `add-api-jobs-retry`). Дельти злиті в `openspec/specs/`; **активних змін немає**,

@@ -42,6 +42,8 @@ import {
   type UserCreate,
   type UserItem,
   type UserPatch,
+  type WorklogDedupResult,
+  type WorklogDuplicatesResponse,
   type WorklogStatus,
   type WorklogSyncTasksResponse,
 } from './types'
@@ -286,6 +288,21 @@ export const api = {
         limit: params.limit,
         offset: params.offset,
       })}`,
+    )
+  },
+
+  /** GET /jr-worklogs/duplicates — групи дубльованих worklog-ів за період
+   *  (той самий ключ дедупу, що `find_match`). Scoped по `worker_key`. */
+  worklogDuplicates(period: Period): Promise<WorklogDuplicatesResponse> {
+    return request<WorklogDuplicatesResponse>(`/jr-worklogs/duplicates${qs({ ...period })}`)
+  },
+
+  /** POST /jr-worklogs/dedup — масово прибрати зайві worklog-и обраних груп
+   *  (реальне видалення з Tempo). `groups` — масив переліків `worklog_id`. */
+  dedupWorklogs(groups: number[][]): Promise<WorklogDedupResult> {
+    return request<WorklogDedupResult>(
+      '/jr-worklogs/dedup',
+      jsonBody({ groups: groups.map((worklog_ids) => ({ worklog_ids })) }),
     )
   },
 

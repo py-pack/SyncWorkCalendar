@@ -462,3 +462,48 @@
 - **Статус:** реалізовано, браузерний QA підтверджено користувачем, заархівовано
   2026-06-23 (`archive/2026-06-23-rework-timecamp-entries-screen/`). `npm run build`
   + backend live smoke/DAO-перевірка + `validate --strict` — чисто.
+
+## D-019 — Дублі worklog-ів: трилогія `harden-job-retry` → `harden-worklog-link` → `add-worklog-dedup-cleanup`
+
+- **Контекст:** подвійний клік по «Перезапустити» в Журналі (кнопка без відгуку)
+  запускав два паралельні синхронні ретраї одного періоду; дедуп
+  (`JRWorklogDAO.find_match`) звіряється з дзеркалом `jr_worklogs`, яке
+  `create_worklog` не оновлює, тож обидва проходи писали в Tempo → **дублі
+  worklog-ів** (один TimeCamp-запис ↔ кілька Tempo). Глибша причина — звʼязок
+  TimeCamp↔Tempo був **неявним** (мʼякий місток WST без FK/`UNIQUE`, дедуп по кортежу).
+- **Рішення користувача (AskUserQuestion):** розбити на **3 зміни** в порядку мерджу
+  **#1→#2→#3**, кожна замикає свій рівень проблеми:
+  - **#1 `harden-job-retry` (першопричина):** ретрай — **рестарт на місці** (не нова
+    job-а): атомарний CAS `failed→running` того самого рядка (`APIJobDAO.retry_claim`);
+    другий/паралельний клік під час `running` → `409` (CAS = guard від подвійного
+    запуску); одразу `db.commit()` звільняє row-lock. State machine отримує легальний
+    перехід `failed→running` (лише через ретрай). Frontend — pending-стан кнопки
+    (спінер+`disabled`). BREAKING внутрішньо: retry повертає той самий `id`.
+  - **#2 `harden-worklog-link` (зміцнення лінку):** WST стає **явним і забезпеченим
+    БД** — `UNIQUE(source_id)` + FK `target_id → jr_worklogs ON DELETE SET NULL`; **на
+    `source_id` — лише `UNIQUE`, без FK/CASCADE** (різні сервіси, історію WST не чіпаємо
+    каскадом). Дедуп **довіряє** `target_id` (кортеж — fallback для орфанів). Alembic
+    `7f8e8dbd1589`: data-fix (дедуп задвоєних WST за `source_id`; занулення 2040
+    дангл-`target_id`) **перед** констрейнтами. НЕ прямий FK у `jr_worklogs` (дзеркало).
+  - **#3 `add-worklog-dedup-cleanup` (прибирання наявних дублів):** `GET
+    /jr-worklogs/duplicates` (групи за ключем дедупу `HAVING count>1`) + `POST
+    /jr-worklogs/dedup` — keep-one **канонічний за `WST.target_id`** (інакше min `id`),
+    **реальне видалення решти з Tempo** (новий `JiraService.delete_worklog`, DELETE,
+    `raise_on_error`), перелінк WST→canonical, чистка дзеркала; помилка одного → в
+    `errors`, не валить усе; обгорнуто в `run_job` (аудит). Третя закладка **«Дублі»**
+    на «Профілі» (+«Оновити з Tempo» перед чисткою) і **похідний прапор `duplicate`**
+    на блоці календаря (окремий від стану синку) + маркер + **фільтр «лише дублі»**.
+- **Ключові інваріанти:** ключ групування дублів = **той самий** кортеж
+  `(jr_issues_id, jr_worker_key, started_at, duration)`, що в `find_match` — інакше
+  «знайдені» дублі розійшлися б із тим, що система вважає одним worklog-ом. Видалення в
+  Tempo **незворотне** (свідоме рішення) — діє лише на **обрані** групи, аудиториться.
+- **Альтернативи (відхилено):** толерантне (±вікно) вікно матчу — складніше, розходиться
+  з наявним дедупом; пряме видалення «всіх дублів підряд» — небезпечно (лише обрані групи).
+- **Capability-дельти (злиті, канонічні):** NEW `worklog-link-integrity`,
+  `api-worklog-dedup`; MODIFIED `api-jobs` (retry→in-place CAS), `frontend-sync-journal`,
+  `backend-auto-linking` (дедуп→лінк-first), `api-calendar`/`frontend-calendar`,
+  `frontend-profile` (3-я закладка).
+- **Статус:** усі три реалізовано й **заархівовано 2026-06-27** (`openspec archive`
+  #1→#2→#3; QA підтверджено користувачем наживо; `validate --specs --strict` 26/26 OK).
+  Теки — `archive/2026-06-27-{harden-job-retry,harden-worklog-link,add-worklog-dedup-cleanup}/`.
+  Alembic head — `7f8e8dbd1589`. Код у робочому дереві, git-commit — на користувача.

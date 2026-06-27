@@ -273,3 +273,48 @@
 .rsync__delta li { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
 .rsync__dk { color: var(--text-3); }
 .rsync__dv { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Закладка «Дублі» профілю (capability api-worklog-dedup). */
+.dups { display: flex; flex-direction: column; gap: 12px; }
+.dups__hint { margin: 0; font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
+.dups__bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dups__summary {
+  margin: 0; font-size: 13px; color: var(--text);
+  padding: 8px 12px; border-radius: 8px; background: var(--surface-2, rgba(0,0,0,.04));
+}
+.dups__summary b { font-variant-numeric: tabular-nums; }
+.dups__state { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px; color: var(--text-3); }
+.dups__empty { font-size: 13px; }
+.dups__selall {
+  display: flex; align-items: center; gap: 8px; flex: none; cursor: pointer;
+  font-size: 12.5px; color: var(--text-2, var(--text)); user-select: none; white-space: nowrap;
+}
+.dups__selall input { flex: none; width: 16px; height: 16px; cursor: pointer; }
+.dups__selall input:disabled { cursor: default; }
+.dups__selcount { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.dups__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.dups__grp {
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  transition: border-color .12s, background .12s;
+}
+.dups__grp.is-on { border-color: var(--accent, #4a7); background: color-mix(in oklch, var(--accent, #4a7) 6%, transparent); }
+.dups__head {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer;
+}
+.dups__head input { flex: none; width: 16px; height: 16px; }
+.dups__task { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.dups__key { font-size: 12.5px; color: var(--text); }
+.dups__name { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dups__meta { font-size: 12px; color: var(--text-3); flex: none; font-variant-numeric: tabular-nums; }
+.dups__count {
+  flex: none; font-size: 12px; font-weight: 600; color: var(--text-2, var(--text));
+  padding: 1px 8px; border-radius: 999px; background: var(--surface-2, rgba(0,0,0,.06));
+}
+.dups__members { margin: 0; padding: 4px 12px 10px 40px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.dups__member { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-3); }
+.dups__mid { flex: none; color: var(--text-2, var(--text)); }
+.dups__linked {
+  flex: none; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--accent, #4a7); border: 1px solid currentColor; border-radius: 4px; padding: 0 5px;
+}
+.dups__desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -79,6 +79,9 @@ class TCEntriesDAO(BaseDAO):
                 TCProject.issue_key.label("project_key"),
                 WorklogSyncTask.status.label("wst_status"),
                 WorklogSyncTask.issue_key.label("wst_issue_key"),
+                # Канонічний лінк на Tempo-worklog — потрібен для похідного прапора
+                # `duplicate` (чи входить worklog блоку в групу дублів, D5).
+                WorklogSyncTask.target_id.label("wst_target_id"),
             )
             .select_from(TCEntry)
             .outerjoin(TCProject, TCProject.id == TCEntry.tc_project_id)

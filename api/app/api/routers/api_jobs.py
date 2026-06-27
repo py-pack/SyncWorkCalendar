@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user, get_db
-from app.api.jobs_wrapper import create_job
 from app.api.routers.sync_triggers import TRIGGER_WORK
 from app.api.schemas.api_jobs import (
     APIJobDetail,
@@ -126,55 +125,69 @@ async def retry_api_job(
     current: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> APIJobDetail:
-    """Синхронно повторити одну `failed`-job-у її ж `trigger_name`+`payload`.
+    """Синхронно перезапустити **ту саму** `failed`-job-у на місці (без нової джоби).
 
-    Створює **нову** `api_jobs`-джобу (стара `failed` лишається в історії, D4) і
-    прогоняє ту саму роботу через спільний реєстр `TRIGGER_WORK` (реюз `_do_*` зі
-    `sync_triggers`). Повертає `APIJobDetail` **нової** job-и в **обох** випадках:
-    успіх → `needs_verification`, повторне падіння → `failed`. Тобто синхронна
-    невдада роботи — це `200` з новою `failed`-джобою, **не** `500` (D3).
+    Рестарт іде через атомарний compare-and-swap `failed → running`
+    (`retry_claim`) — це й guard від подвійного кліку: другий/паралельний клік
+    бачить, що рядок уже не `failed`, і отримує `409`, жодної роботи не запускає.
+    Після успішного CAS прогоняє ту саму роботу через реєстр `TRIGGER_WORK` (реюз
+    `_do_*` зі `sync_triggers`) і закриває **той самий** рядок: успіх →
+    `needs_verification`, повторне падіння → `failed`. Повертає `APIJobDetail`
+    **того самого** `id` в обох випадках; синхронна невдача роботи — це `200`, **не**
+    `500` (D2/D3).
 
     - `404`, якщо job-и немає.
-    - `409`, якщо `status != failed` (ретраяться лише впалі).
-    - `422`, якщо `trigger_name` невідомий реєстру (`trigger is not retryable`).
+    - `409`, якщо CAS не зачепив рядок (`status != failed`: уже `running` від
+      попереднього кліку, `needs_verification`/`verified`).
+    - `422`, якщо `trigger_name` невідомий реєстру (рядок закривається у `failed`
+      з поясненням; guard уже зайняв рядок, тож CAS лишається коректним).
     """
     job = await APIJobDAO.get_by_id(db, job_id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="api job not found"
         )
-    if job.status != APIJobStatusEnum.failed:
+    # Беремо параметри роботи до CAS/коміту (expire_on_commit=False, але рядок
+    # мутуємо Core-`UPDATE`-ом, тож читаємо ORM-поля наперед у локальні змінні).
+    trigger_name = job.trigger_name
+    payload = job.payload
+
+    # Атомарний CAS `failed → running` — самодостатній guard від подвійного кліку.
+    claimed = await APIJobDAO.retry_claim(db, job_id)
+    if not claimed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="job is not in failed status",
         )
-    work = TRIGGER_WORK.get(job.trigger_name)
+    # Зафіксувати рестарт одразу: звільняє row-lock і робить `running` видимим для
+    # паралельного кліку (той одразу дістане `409`), а не лише в кінці запиту.
+    await db.commit()
+
+    work = TRIGGER_WORK.get(trigger_name)
     if work is None:
+        async with async_session_maker() as session:
+            await APIJobDAO.mark_failed(session, job_id, "trigger is not retryable")
+            await session.commit()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="trigger is not retryable",
         )
 
-    # Нова `running`-джоба з тими ж параметрами; стару не мутуємо.
-    payload = job.payload
-    new_job_id = await create_job(
-        trigger_name=job.trigger_name,
-        payload=payload,
-        created_by=current.username,
-    )
-
-    # Синхронне виконання з гарантованим закриттям рядка у власній сесії (як
-    # `jobs_wrapper`/`_execute`): re-raise НЕ робимо — повертаємо нову job-у завжди.
+    # Синхронне виконання з гарантованим закриттям **того самого** рядка у власній
+    # сесії (як `jobs_wrapper`): re-raise НЕ робимо — повертаємо цей рядок завжди.
     try:
         result = await work(payload)
     except Exception as exc:
         async with async_session_maker() as session:
-            await APIJobDAO.mark_failed(session, new_job_id, str(exc))
+            await APIJobDAO.mark_failed(session, job_id, str(exc))
             await session.commit()
     else:
         async with async_session_maker() as session:
-            await APIJobDAO.mark_needs_verification(session, new_job_id, result)
+            await APIJobDAO.mark_needs_verification(session, job_id, result)
             await session.commit()
 
-    new_job = await APIJobDAO.get_by_id(db, new_job_id)
-    return APIJobDetail.model_validate(new_job)
+    # Свіжа сесія: `db` має застарілу копію рядка (expire_on_commit=False), а
+    # фінальний стан закрили інші сесії.
+    async with async_session_maker() as session:
+        refreshed = await APIJobDAO.get_by_id(session, job_id)
+        return APIJobDetail.model_validate(refreshed)

@@ -45,5 +45,20 @@ const store = useCalendarStore()
         </button>
       </div>
     </div>
+
+    <div class="cal__fsep" />
+
+    <div class="cal__fgroup">
+      <div class="cal__chips">
+        <button
+          :class="['chip', 'chip--dup', { 'is-on': store.onlyDups }]"
+          :title="t.blk_dup_note"
+          @click="store.toggleOnlyDups()"
+        >
+          <Icon name="alert" :size="13" />
+          {{ t.cal_only_dups }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>

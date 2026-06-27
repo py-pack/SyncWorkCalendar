@@ -1,11 +1,12 @@
 from datetime import date
 from typing import Literal, cast
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, get_current_user, get_db
+from app.api.jobs_wrapper import run_job
 from app.api.period import current_month as _current_month, period_or_400 as _period_or_400
 from app.api.schemas.sync_status import (
     JRWorklogItem,
@@ -13,14 +14,22 @@ from app.api.schemas.sync_status import (
     TCEntriesResponse,
     TCEntryItem,
     UntrackedEntry,
+    WorklogDedupRequest,
+    WorklogDedupResponse,
+    WorklogDuplicateGroup,
+    WorklogDuplicateMember,
+    WorklogDuplicatesResponse,
     WorklogSyncTaskItem,
     WorklogSyncTasksResponse,
 )
 from app.dao import JRWorklogDAO, TCEntriesDAO
 from app.models import JRIssue, StatusTaskEnum, TCEntry, TCProject, WorklogSyncTask
+from app.tasks.dedup_task import WorklogDedupTask
 
 
 router = APIRouter()
+
+_MISSING_WORKER_KEY = "user has no worker_key configured"
 
 
 @router.get("/worklog-sync-tasks", response_model=WorklogSyncTasksResponse)
@@ -158,6 +167,82 @@ async def list_jr_worklogs(
         for r in rows
     ]
     return JRWorklogsResponse(items=items, total=total)
+
+
+@router.get("/jr-worklogs/duplicates", response_model=WorklogDuplicatesResponse)
+async def list_jr_worklog_duplicates(
+    start: date | None = Query(default=None),
+    end: date | None = Query(default=None),
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> WorklogDuplicatesResponse:
+    """Групи дубльованих Tempo-worklog-ів поточного `worker_key` за період.
+
+    Дубль — ≥2 рядки `jr_worklogs` із однаковим ключем дедупу
+    `(jr_issues_id, jr_worker_key, started_at, duration)`, тим самим, що в
+    `JRWorklogDAO.find_match`. Scoped по `worker_key` (без нього — порожньо);
+    період за `started_at` (дефолт — поточний місяць), `start <= end` інакше 400.
+    """
+    if start is None or end is None:
+        d_start, d_end = _current_month()
+        start = start or d_start
+        end = end or d_end
+    _period_or_400(start, end)  # лише валідація (400, якщо start > end)
+
+    groups = await JRWorklogDAO.find_duplicate_groups(
+        db, worker_key=current.worker_key, date_from=start, date_to=end
+    )
+    return WorklogDuplicatesResponse(
+        groups=[
+            WorklogDuplicateGroup(
+                jr_issues_id=g["jr_issues_id"],
+                started_at=g["started_at"],
+                duration=g["duration"],
+                issue_key=g["issue_key"],
+                issue_name=g["issue_name"],
+                count=g["count"],
+                members=[
+                    WorklogDuplicateMember(
+                        id=m["id"],
+                        description=m["description"],
+                        created_at=m["created_at"],
+                        is_linked=m["is_linked"],
+                    )
+                    for m in g["members"]
+                ],
+            )
+            for g in groups
+        ]
+    )
+
+
+@router.post("/jr-worklogs/dedup", response_model=WorklogDedupResponse)
+async def dedup_jr_worklogs(
+    body: WorklogDedupRequest = Body(...),
+    current: CurrentUser = Depends(get_current_user),
+) -> WorklogDedupResponse:
+    """Масово прибрати зайві worklog-и обраних груп (реальне видалення з Tempo).
+
+    Лишає один канонічний на групу (явний `WST.target_id`, інакше min `id`),
+    решту видаляє з Tempo і з дзеркала, перелінковує WST. Без `worker_key` — `400`
+    (видалення персональне). Обгорнуто в `run_job` (`worklog.dedup-cleanup`), тож
+    осідає в `api_jobs` як аудит. Помилка одного worklog-а — в `errors`, не валить
+    усю дію.
+    """
+    if not current.worker_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_MISSING_WORKER_KEY
+        )
+
+    groups = [g.worklog_ids for g in body.groups]
+    async with run_job(
+        trigger_name="worklog.dedup-cleanup",
+        payload={"groups": groups},
+        created_by=current.username,
+    ) as ctx:
+        ctx.result = await WorklogDedupTask().run(groups, worker=current.worker_key)
+
+    return WorklogDedupResponse(**ctx.result)
 
 
 @router.get("/tc-entries", response_model=TCEntriesResponse)

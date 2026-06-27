@@ -218,6 +218,47 @@ export interface JRWorklogsResponse {
   total: number
 }
 
+// Дублі worklog-ів (capability api-worklog-dedup) -----------------------------
+
+/** Член групи дублів — один реальний Tempo-worklog. */
+export interface WorklogDuplicateMember {
+  id: number
+  description: string | null
+  created_at: string | null
+  /** Чи вказує на цей worklog якийсь `WST.target_id` (явний лінк-місток). */
+  is_linked: boolean
+}
+
+/** Група дубльованих worklog-ів за ключем дедупу (`count > 1`). */
+export interface WorklogDuplicateGroup {
+  jr_issues_id: number
+  started_at: string
+  duration: number
+  issue_key: string | null
+  issue_name: string | null
+  count: number
+  members: WorklogDuplicateMember[]
+}
+
+/** Відповідь GET /jr-worklogs/duplicates. */
+export interface WorklogDuplicatesResponse {
+  groups: WorklogDuplicateGroup[]
+}
+
+/** Помилка видалення одного worklog-а під час чистки. */
+export interface WorklogDedupError {
+  worklog_id: number
+  reason: string
+}
+
+/** Підсумок POST /jr-worklogs/dedup. */
+export interface WorklogDedupResult {
+  deleted: number
+  kept: number
+  groups: number
+  errors: WorklogDedupError[]
+}
+
 // Calendar (capability api-calendar / frontend-calendar) --------------------
 
 /** Стан блоку календаря (проекція `StatusTaskEnum`). Бекенд віддає лише ці
@@ -239,6 +280,8 @@ export interface CalendarBlock {
   issue_key: string | null
   description: string | null
   status: CalendarStatus
+  /** Окремий прапор (НЕ стан синку): worklog блоку входить у групу дублів. */
+  duplicate: boolean
   project: CalendarProject
 }
 

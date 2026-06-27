@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import type { ApiJobStatus, Period } from '@/api/types'
 import DataPage from '@/components/data/DataPage.vue'
@@ -90,6 +90,21 @@ function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+// --- ретрай: pending-стан по id рядка (спінер + disabled під час запиту) -----
+// Це фронтовий guard від подвійного кліку; бекендний CAS — друга лінія оборони
+// (паралельний клік → 409). `store.retry` сам ковтає помилку у банер, тож тут
+// лише тримаємо видимий pending до завершення запиту (успіх чи помилка).
+const retrying = ref<Set<string>>(new Set())
+async function onRetry(id: string): Promise<void> {
+  if (retrying.value.has(id)) return
+  retrying.value.add(id)
+  try {
+    await store.retry(id)
+  } finally {
+    retrying.value.delete(id)
+  }
+}
+
 // Лише читання з БД при відкритті — журнал сам є логом синків (D6).
 onMounted(() => void store.load())
 </script>
@@ -171,10 +186,12 @@ onMounted(() => void store.load())
             v-else-if="row.status === 'failed'"
             size="sm"
             variant="soft"
-            icon="sync"
-            @click.stop="store.retry(row.id)"
+            :icon="retrying.has(row.id) ? undefined : 'sync'"
+            :disabled="retrying.has(row.id)"
+            @click.stop="onRetry(row.id)"
           >
-            {{ t.job_retry }}
+            <Spinner v-if="retrying.has(row.id)" :size="14" />
+            <template v-else>{{ t.job_retry }}</template>
           </Btn>
           <Icon v-else name="chevR" :size="16" />
         </template>

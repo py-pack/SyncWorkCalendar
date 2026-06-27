@@ -8,6 +8,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ApiError } from '@/api/types'
 import type { TabItem } from '@/components/data/types'
 import DataPage from '@/components/data/DataPage.vue'
+import DuplicatesTab from '@/components/profile/DuplicatesTab.vue'
 import SyncPrefsToggles from '@/components/profile/SyncPrefsToggles.vue'
 import Btn from '@/components/ui/Btn.vue'
 import Field from '@/components/ui/Field.vue'
@@ -17,10 +18,11 @@ import { useAuthStore } from '@/stores/auth'
 const { t } = useI18n()
 const auth = useAuthStore()
 
-const tab = ref<'personal' | 'sync'>('personal')
+const tab = ref<'personal' | 'sync' | 'dups'>('personal')
 const tabs = computed<TabItem[]>(() => [
   { id: 'personal', label: t.value.prof_tab_personal, icon: 'user' },
   { id: 'sync', label: t.value.prof_tab_sync, icon: 'sync' },
+  { id: 'dups', label: t.value.prof_tab_dups, icon: 'copy' },
 ])
 
 const me = computed(() => auth.currentUser)
@@ -86,7 +88,7 @@ async function savePw(): Promise<void> {
     :desc="t.prof_desc"
     :tabs="tabs"
     :active-tab="tab"
-    @update:active-tab="tab = $event as 'personal' | 'sync'"
+    @update:active-tab="tab = $event as 'personal' | 'sync' | 'dups'"
   >
     <template v-if="tab === 'personal'">
       <div class="prof">
@@ -144,8 +146,12 @@ async function savePw(): Promise<void> {
       </div>
     </template>
 
-    <template v-else>
+    <template v-else-if="tab === 'sync'">
       <SyncPrefsToggles />
+    </template>
+
+    <template v-else>
+      <DuplicatesTab />
     </template>
   </DataPage>
 </template>

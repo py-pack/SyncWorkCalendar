@@ -34,6 +34,9 @@ class CalendarBlock(BaseModel):
     issue_key: str | None = None
     description: str | None = None
     status: CalendarStatusLiteral
+    # Окремий прапор (НЕ стан синку): worklog блоку входить у групу дублів у
+    # періоді (capability `api-worklog-dedup`). Набір станів синку незмінний.
+    duplicate: bool = False
     project: CalendarProject
 
 

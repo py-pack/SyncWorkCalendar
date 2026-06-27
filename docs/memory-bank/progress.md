@@ -22,8 +22,60 @@
 
 ## Що в роботі (OpenSpec)
 
-**Наразі активних OpenSpec-змін немає** (`openspec list` порожній). Нижче — нещодавно
-заархівована трилогія Журналу; дельти злиті в `openspec/specs/`,
+**Активних змін немає** (станом на 2026-06-27). Трилогія «фікс дублів worklog-ів»
+**ЗААРХІВОВАНА 2026-06-27** (`openspec archive`, послідовно #1→#2→#3; усі QA
+підтверджено користувачем наживо; дельти злиті, `validate --specs --strict` 26/26 OK)
+— деталі в `activeContext.md`. **#1 `harden-job-retry` — ЗААРХІВОВАНО (11/11);
+#2 `harden-worklog-link` — ЗААРХІВОВАНО (14/14); #3 `add-worklog-dedup-cleanup` —
+ЗААРХІВОВАНО (22/22). Шляхи — `openspec/changes/archive/2026-06-27-*`. Нижче — повний
+запис реалізації:**
+
+- [`harden-job-retry`](../../openspec/changes/archive/2026-06-27-harden-job-retry/) (11 задач) —
+  **ЗААРХІВОВАНО 2026-06-27 (11/11; браузерний QA підтверджено користувачем; `validate
+  --strict` OK; `npm run build` чисто; бекенд верифіковано наживо — усі гілки PASS;
+  дельти злиті в `openspec/specs/`).**
+  Усуває першопричину дублів: `POST /api-jobs/{id}/retry` рестартує **ту саму**
+  failed-джобу на місці через CAS `failed→running` (новий `APIJobDAO.retry_claim` —
+  один `UPDATE ... WHERE id AND status='failed'`), 409 на паралельний/повторний клік
+  (CAS = guard; одразу `db.commit()` звільняє row-lock), невідомий тригер→422 (рядок
+  →failed), робота через `TRIGGER_WORK` із закриттям того самого рядка (без re-raise→
+  не 500), фінальне читання у свіжій сесії (`expire_on_commit=False`); прибрано
+  `create_job`. Frontend: локальний `retrying: Set` + `onRetry(id)` у `JournalView`
+  (спінер + `disabled`, guard від подвійного кліку). MODIFIED
+  `api-jobs`/`frontend-sync-journal`. Без alembic. Лишилось: 3.4 QA + git-commit.
+- [`harden-worklog-link`](../../openspec/changes/archive/2026-06-27-harden-worklog-link/) (14 задач) —
+  **ЗААРХІВОВАНО 2026-06-27 (14/14; live-QA re-sync підтверджено користувачем;
+  `validate --strict` OK; дельти злиті в `openspec/specs/`).** Робить місток TimeCamp↔Tempo явним: WST отримує
+  `UNIQUE(source_id)` (унікальний індекс `ix_worklog_sync_tasks_source_id`) + FK
+  `target_id→jr_worklogs` (SET NULL); **на `source_id` — лише `UNIQUE`, без
+  FK/CASCADE** (історію не чіпаємо); дедуп довіряє лінку (кортеж — fallback, лише
+  docstring/коментарі — логіка незмінна). **Alembic `7f8e8dbd1589`** (поверх
+  `69dde0d17ff2`, застосовано наживо) — data-fix (дедуп задвоєних WST за `source_id`
+  — 0 наживо; занулення дангл-`target_id` — 2040 наживо) перед констрейнтами;
+  `alembic check` чистий. Синтетика DB-інваріантів (UNIQUE / SET NULL / без каскаду
+  на source) + smoke реконсиляції (порожній майбутній період) — усі PASS. NEW
+  `worklog-link-integrity`; MODIFIED `backend-auto-linking`.
+- [`add-worklog-dedup-cleanup`](../../openspec/changes/archive/2026-06-27-add-worklog-dedup-cleanup/)
+  (22 задачі) — **ЗААРХІВОВАНО 2026-06-27 (22/22; браузерний QA підтверджено користувачем;
+  `validate --strict` OK; `npm run build` чисто; **без alembic**, head `7f8e8dbd1589`;
+  дельти злиті в `openspec/specs/`).**
+  Прибирає наявні дублі (будується на явному лінку): NEW `api-worklog-dedup`
+  (`GET /jr-worklogs/duplicates` — `JRWorklogDAO.find_duplicate_groups` `GROUP BY`
+  ключа дедупу `HAVING count>1`, scoped по `worker_key`; `POST /jr-worklogs/dedup` —
+  `WorklogDedupTask` keep-one за `WST.target_id` (інакше min `id`), перелінк WST→
+  canonical, реальне Tempo-видалення новим `JiraService.delete_worklog` (`DELETE`,
+  `raise_on_error`; `_make_request` тепер толерує порожнє успішне тіло), помилка
+  одного→`errors`, обгорнуто в `run_job` `worklog.dedup-cleanup`; обидва ендпоінти в
+  `sync_status.py`), третя закладка «Дублі» на «Профілі» (`DuplicatesTab.vue`:
+  групи+чекбокси, «Виправити обрані», «Оновити з Tempo» через `POST /sync/jira/worklogs`,
+  спінер/підсумок), похідний прапор `duplicate` на блоці календаря (`get_calendar_blocks`
+  +`wst_target_id`, роутер: `target_id ∈ dup_ids`) + амбер-маркер/бордюр + позначка в
+  деталях + фільтр-чип «лише дублі» (`onlyDups`). MODIFIED `frontend-profile`/
+  `api-calendar`/`frontend-calendar`. **Верифікація:** DAO dedup 22/22, календарний
+  прапор 7/7, `delete_worklog` 5/5 (синтетика проти реальної БД у транзакції з ROLLBACK
+  + фейковий Tempo); живі OpenAPI-маршрути/`401`/`CalendarBlock.duplicate` — PASS.
+
+Нижче — нещодавно заархівована трилогія Журналу; дельти злиті в `openspec/specs/`,
 `validate --specs --strict` — 24/24 OK.
 
 - [`add-api-jobs-retry`](../../openspec/changes/archive/2026-06-26-add-api-jobs-retry/)
@@ -374,10 +426,12 @@
 
 ## Що не реалізовано
 
-- Сценарій оновлення (`pre_update → update → updated`) і видалення раніше
-  створених worklog-ів у `Tempo` — статуси оголошені, логіки немає; винесено в
-  майбутню `add-worklog-update-flow` (активується редагуванням/видаленням
-  `synced`-блоку календаря).
+- Загальний сценарій оновлення (`pre_update → update → updated`) для довільного
+  редагування `synced`-блоку — винесено в майбутню `add-worklog-update-flow`
+  (активується редагуванням `synced`-блоку календаря). **Tempo `update_worklog`**
+  (PUT) уже є (`add-celery-auto-linking`), а **`delete_worklog`** (DELETE) додано
+  `add-worklog-dedup-cleanup` (2026-06-27), але **поки лише для дедуп-чистки**
+  (`POST /jr-worklogs/dedup`) — не як загальна дія видалення блоку календаря.
 - Редагування календаря (CRUD блоків, drag/resize/split/duplicate/delete,
   per-block і масовий sync, колонка `billable`) — майбутня `add-calendar-editing`
   (календар поки read-only, D-016).

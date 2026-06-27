@@ -36,6 +36,7 @@ export const useCalendarStore = defineStore('calendar', () => {
   const variant = useStored<BlockVariant>('cal.variant', 'soft')
   const hiddenProj = ref<Set<string>>(new Set())
   const hiddenStatus = ref<Set<CalendarStatus>>(new Set())
+  const onlyDups = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -64,9 +65,15 @@ export const useCalendarStore = defineStore('calendar', () => {
   // --- фільтри ---------------------------------------------------------------
   const visible = computed(() =>
     blocks.value.filter(
-      (b) => !hiddenProj.value.has(projectId(b.project)) && !hiddenStatus.value.has(b.status),
+      (b) =>
+        !hiddenProj.value.has(projectId(b.project)) &&
+        !hiddenStatus.value.has(b.status) &&
+        (!onlyDups.value || b.duplicate),
     ),
   )
+
+  /** Чи є взагалі дублі цього тижня (для показу/підсвітки чипа фільтра). */
+  const hasDups = computed(() => blocks.value.some((b) => b.duplicate))
 
   /** Усі проекти (з усіх блоків, не лише видимих) для чипів фільтра. */
   const projects = computed<CalProjectChip[]>(() => {
@@ -126,15 +133,18 @@ export const useCalendarStore = defineStore('calendar', () => {
     n.has(s) ? n.delete(s) : n.add(s)
     hiddenStatus.value = n
   }
+  function toggleOnlyDups(): void {
+    onlyDups.value = !onlyDups.value
+  }
   function setVariant(v: BlockVariant): void {
     variant.value = v
   }
 
   return {
-    blocks, variant, loading, error,
+    blocks, variant, loading, error, onlyDups,
     weekStart, weekEnd, weekNo, weekDates, todayIndex, nowMin,
-    visible, projects, statuses,
+    visible, projects, statuses, hasDups,
     byDay, dayTotals, weekTotal, billableTotal,
-    load, shift, goToday, toggleProj, toggleStatus, setVariant,
+    load, shift, goToday, toggleProj, toggleStatus, toggleOnlyDups, setVariant,
   }
 })
